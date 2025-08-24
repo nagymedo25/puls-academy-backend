@@ -1,4 +1,4 @@
-// puls-academy-backend/routes/courseRoutes.js// puls-academy-backend/routes/courseRoutes.js
+// puls-academy-backend/routes/courseRoutes.js
 
 const express = require('express');
 const router = express.Router();
@@ -21,20 +21,20 @@ router.get('/:courseId/lessons', authMiddleware, CourseController.getCourseLesso
 router.get('/:courseId/lessons/:lessonId', authMiddleware, CourseController.getLessonById);
 
 // --- Admin Routes (Authenticated & Admin) ---
-router.post('/', authMiddleware, adminMiddleware, uploadMiddleware.single('preview'), CourseController.createCourse);
-router.put('/:courseId', authMiddleware, adminMiddleware, uploadMiddleware.single('preview'), CourseController.updateCourse);
+// تم إزالة uploadMiddleware من هنا، حيث سيتم إدخال الرابط يدويًا
+router.post('/', authMiddleware, adminMiddleware, CourseController.createCourse);
+// تم إزالة uploadMiddleware من هنا، حيث سيتم إدخال الرابط يدويًا
+router.put('/:courseId', authMiddleware, adminMiddleware, CourseController.updateCourse);
 router.delete('/:courseId', authMiddleware, adminMiddleware, CourseController.deleteCourse);
 
 // --- NEW ROUTE TO ADD ---
-// This route handles adding a new lesson to a specific course.
+// تم تعديل هذا المسار ليقبل صورة مصغرة فقط
 router.post(
     '/:courseId/lessons',
     authMiddleware,
     adminMiddleware,
-    uploadMiddleware.fields([
-        { name: 'video', maxCount: 1 },
-        { name: 'thumbnail', maxCount: 1 }
-    ]),
+    // تغيير fields إلى single وقبول الصورة المصغرة فقط
+    uploadMiddleware.single('thumbnail'),
     CourseController.addLessonToCourse
 );
 

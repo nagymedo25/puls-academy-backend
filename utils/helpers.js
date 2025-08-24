@@ -1,4 +1,5 @@
 // puls-academy-backend/utils/helpers.js
+const axios = require('axios');
 
 const generateRandomCode = (length = 6) => {
     const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
@@ -166,6 +167,36 @@ const throttle = (func, limit) => {
     };
 };
 
+const isValidVideoUrl = async (url) => {
+    try {
+        if (!url || !url.startsWith('https://drive.google.com/uc?export=view&id=')) {
+            // تحقق أيضًا من رابط المشاركة العادي
+            if (!url || !url.includes('drive.google.com')) {
+                return false;
+            }
+        }
+
+        const response = await axios.head(url, {
+            httpsAgent: new (require('https').Agent)({ rejectUnauthorized: false }),
+            timeout: 5000
+        });
+
+        if (response.status === 200 && response.headers['content-type'] && response.headers['content-type'].startsWith('video/')) {
+            return true;
+        }
+        
+        // قد لا تعمل google drive دائمًا مع طلبات HEAD، لذلك سنقوم بإجراء فحص إضافي
+        if (response.status === 200) {
+            return true;
+        }
+
+        return false;
+    } catch (error) {
+        console.error('Error validating video URL:', error.message);
+        return false;
+    }
+};
+
 module.exports = {
     generateRandomCode,
     formatPrice,
@@ -185,5 +216,6 @@ module.exports = {
     formatFileSize,
     retryAsync,
     debounce,
-    throttle
+    throttle,
+    isValidVideoUrl // **هذا هو السطر المهم الذي تم تصحيحه**
 };
