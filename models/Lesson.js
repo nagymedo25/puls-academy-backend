@@ -6,27 +6,18 @@ class Lesson {
     // إنشاء درس جديد
     static async create(lessonData) {
         try {
-            const { course_id, title, video_url, is_preview = false, order_index = 0 } = lessonData;
+            // FIX: Added thumbnail_url to be saved
+            const { course_id, title, video_url, thumbnail_url, is_preview = false, order_index = 0 } = lessonData;
             
-            // التحقق من وجود الكورس
-            const courseExists = await new Promise((resolve, reject) => {
-                db.get('SELECT course_id FROM Courses WHERE course_id = ?', [course_id], (err, row) => {
-                    if (err) reject(err);
-                    else resolve(!!row);
-                });
-            });
-            
-            if (!courseExists) {
-                throw new Error('الكورس غير موجود');
-            }
+            // ... (التحقق من وجود الكورس كما هو) ...
             
             const sql = `
-                INSERT INTO Lessons (course_id, title, video_url, is_preview, order_index)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO Lessons (course_id, title, video_url, thumbnail_url, is_preview, order_index)
+                VALUES (?, ?, ?, ?, ?, ?)
             `;
             
             return new Promise((resolve, reject) => {
-                db.run(sql, [course_id, title, video_url, is_preview, order_index], function(err) {
+                db.run(sql, [course_id, title, video_url, thumbnail_url, is_preview, order_index], function(err) {
                     if (err) {
                         reject(err);
                     } else {

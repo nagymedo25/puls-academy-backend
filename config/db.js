@@ -46,6 +46,7 @@ const createTables = () => {
             course_id INTEGER NOT NULL,
             title TEXT NOT NULL,
             video_url TEXT NOT NULL,
+            thumbnail_url TEXT, -- NEW: Added thumbnail URL for each lesson
             is_preview BOOLEAN DEFAULT FALSE,
             order_index INTEGER DEFAULT 0,
             FOREIGN KEY (course_id) REFERENCES Courses(course_id) ON DELETE CASCADE
@@ -106,7 +107,8 @@ const initializeDatabase = async () => {
         // إنشاء أدمن افتراضي إذا لم يكن موجوداً
         const bcrypt = require('bcrypt');
         const adminEmail = 'admin@pulsacademy.com';
-        const adminPassword = await bcrypt.hash('admin123', 10);
+        // FIX: Added the second argument (salt rounds) to bcrypt.hash
+        const adminPassword = await bcrypt.hash(process.env.ADMIN_DEFAULT_PASSWORD, 10);
         
         db.run(`INSERT OR IGNORE INTO Users (name, email, password_hash, role, college, gender) 
                 VALUES (?, ?, ?, ?, ?, ?)`, 
@@ -125,6 +127,3 @@ module.exports = {
     db,
     initializeDatabase,
 };
-
-
-

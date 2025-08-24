@@ -42,7 +42,7 @@ async function connectToMega() {
   }
 }
 
-// دالة لرفع ملف إلى MEGA
+// دالة لرفع ملف إلى MEGA مع إظهار التقدم
 async function uploadFile(file) {
   try {
     const storage = await connectToMega();
@@ -55,11 +55,24 @@ async function uploadFile(file) {
     // تحويل الـ buffer إلى stream
     const fileStream = Readable.from(buffer);
 
-    // رفع الملف إلى المجلد الرئيسي في حسابك
-    const uploadedFile = await storage.upload({
+    // إنشاء عملية الرفع
+    const uploadStream = storage.upload({
         name: originalname,
         size: buffer.length
-    }, fileStream).complete;
+    }, fileStream);
+
+    // NEW: Listen for progress events and log them to the console
+    uploadStream.on('progress', (progress) => {
+        const percentage = Math.round(progress.bytesLoaded / progress.bytesTotal * 100);
+        // طباعة شريط التقدم في الـ console
+        process.stdout.write(`Uploading ${originalname}: ${percentage}% complete\r`);
+    });
+
+    // انتظار اكتمال الرفع
+    const uploadedFile = await uploadStream.complete;
+    
+    // طباعة سطر جديد بعد اكتمال الرفع
+    process.stdout.write('\n'); 
 
     // الحصول على رابط عام للملف
     const link = await uploadedFile.link(true); // true to get the key
@@ -69,7 +82,6 @@ async function uploadFile(file) {
     // إرجاع الرابط ومعرف الملف
     return {
       url: link,
-      // سنستخدم الرابط كمعرف فريد للملف في هذه الحالة
       id: uploadedFile.handle 
     };
   } catch (error) {
@@ -86,16 +98,14 @@ async function deleteFile(fileId) {
             throw new Error('MEGA connection is not available.');
         }
 
-        // البحث عن الملف باستخدام المعرف (handle)
         const fileToDelete = storage.files.get(fileId);
 
         if (!fileToDelete) {
             console.warn(`File with ID ${fileId} not found in MEGA for deletion.`);
-            return true; // اعتباره محذوفًا إذا لم يكن موجودًا
+            return true;
         }
         
-        // حذف الملف
-        await fileToDelete.delete(true); // true for permanent deletion
+        await fileToDelete.delete(true);
         console.log(`File deleted from MEGA: ${fileId}`);
         return true;
 

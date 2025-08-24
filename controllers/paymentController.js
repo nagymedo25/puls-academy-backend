@@ -36,7 +36,7 @@ class PaymentController {
         amount: parseFloat(amount),
         method,
         // نستخدم الآن معرف الملف (ID) من Google Drive
-        screenshot_path: uploadResult.id,
+        screenshot_path: uploadResult.url,
       });
 
       await Notification.createPaymentPending(user_id, course.title);

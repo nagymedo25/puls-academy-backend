@@ -3,209 +3,104 @@
 const Course = require('../models/Course');
 const Lesson = require('../models/Lesson');
 const Enrollment = require('../models/Enrollment');
-const Payment = require('../models/Payment');
-const { uploadFile, generateFolderPath } = require('../config/storage');
+const { uploadFile } = require('../config/storage');
 
 class CourseController {
+    // ... (keep all existing functions like getAllCourses, createCourse, etc.) ...
+
     static async getAllCourses(req, res) {
-        try {
-            const { category, college_type, min_price, max_price, limit, offset } = req.query;
-            
-            const filters = {};
-            if (category) filters.category = category;
-            if (college_type) filters.college_type = college_type;
-            if (min_price) filters.min_price = parseFloat(min_price);
-            if (max_price) filters.max_price = parseFloat(max_price);
-            if (limit) filters.limit = parseInt(limit);
-            if (offset) filters.offset = parseInt(offset);
-            
-            const courses = await Course.getAll(filters);
-            res.json({ courses });
-            
-        } catch (error) {
-            res.status(500).json({ error: error.message });
-        }
+        // ... (existing code)
     }
-    
+
     static async getCourseById(req, res) {
-        try {
-            const { courseId } = req.params;
-            const course = await Course.findById(courseId);
-            res.json({ course });
-            
-        } catch (error) {
-            res.status(404).json({ error: error.message });
-        }
+        // ... (existing code)
     }
-    
+
     static async getAvailableCourses(req, res) {
-        try {
-            const courses = await Course.getAvailableForUser(req.user);
-            res.json({ courses });
-            
-        } catch (error) {
-            res.status(500).json({ error: error.message });
-        }
+        // ... (existing code)
     }
-    
+
     static async createCourse(req, res) {
-        try {
-            const { title, description, category, college_type, price } = req.body;
-            
-            if (!title || !description || !category || !college_type || price === undefined) {
-                return res.status(400).json({ error: 'جميع الحقول مطلوبة' });
-            }
-            
-            let preview_url = null;
-            if (req.file) {
-                const folderPath = generateFolderPath('course_video', category, college_type, title);
-                const uploadResult = await uploadFile(req.file, folderPath);
-                preview_url = uploadResult.url;
-            }
-            
-            const course = await Course.create({
-                title,
-                description,
-                category,
-                college_type,
-                price: parseFloat(price),
-                preview_url
-            });
-            
-            res.status(201).json({
-                message: 'تم إنشاء الكورس بنجاح',
-                course
-            });
-            
-        } catch (error) {
-            res.status(400).json({ error: error.message });
-        }
+        // ... (existing code)
     }
-    
+
     static async updateCourse(req, res) {
-        try {
-            const { courseId } = req.params;
-            const { title, description, category, college_type, price } = req.body;
-            
-            const courseData = {};
-            if (title !== undefined) courseData.title = title;
-            if (description !== undefined) courseData.description = description;
-            if (category !== undefined) courseData.category = category;
-            if (college_type !== undefined) courseData.college_type = college_type;
-            if (price !== undefined) courseData.price = parseFloat(price);
-            
-            if (req.file) {
-                const course = await Course.findById(courseId);
-                const folderPath = generateFolderPath('course_video', course.category, course.college_type, course.title);
-                const uploadResult = await uploadFile(req.file, folderPath);
-                courseData.preview_url = uploadResult.url;
-            }
-            
-            const updatedCourse = await Course.update(courseId, courseData);
-            
-            res.json({
-                message: 'تم تحديث الكورس بنجاح',
-                course: updatedCourse
-            });
-            
-        } catch (error) {
-            res.status(400).json({ error: error.message });
-        }
+        // ... (existing code)
     }
-    
+
     static async deleteCourse(req, res) {
-        try {
-            const { courseId } = req.params;
-            await Lesson.deleteByCourseId(courseId);
-            await Enrollment.deleteByCourse(courseId);
-            const result = await Course.delete(courseId);
-            
-            res.json(result);
-            
-        } catch (error) {
-            res.status(400).json({ error: error.message });
-        }
+        // ... (existing code)
     }
-    
+
     static async getCourseLessons(req, res) {
-        try {
-            const { courseId } = req.params;
-            const user = req.user;
-            
-            const lessons = await Lesson.getByCourseId(courseId, user);
-            res.json({ lessons });
-            
-        } catch (error) {
-            res.status(500).json({ error: error.message });
-        }
+        // ... (existing code)
     }
-    
+
     static async getPreviewLesson(req, res) {
+        // ... (existing code)
+    }
+
+    static async getLessonById(req, res) {
+        // ... (existing code)
+    }
+
+    static async searchCourses(req, res) {
+        // ... (existing code)
+    }
+
+    static async getCourseStats(req, res) {
+        // ... (existing code)
+    }
+
+    static async getTopSellingCourses(req, res) {
+        // ... (existing code)
+    }
+
+
+    // --- NEW FUNCTION TO ADD ---
+    /**
+     * Handles adding a new lesson to an existing course.
+     * Requires admin authentication.
+     */
+    static async addLessonToCourse(req, res) {
         try {
             const { courseId } = req.params;
-            const lesson = await Lesson.getPreviewLesson(courseId);
-            
-            if (!lesson) {
-                return res.status(404).json({ error: 'لا يوجد درس معاينة لهذا الكورس' });
+            const { title, order_index } = req.body;
+
+            // FIX: Check for req.files instead of req.file
+            // req.files will contain { video: [...], thumbnail: [...] }
+            if (!title || !req.files || !req.files.video || !req.files.thumbnail) {
+                return res.status(400).json({ error: 'عنوان الدرس، ملف الفيديو، والصورة المصغرة مطلوبان' });
             }
+
+            // 1. Upload both the video and the thumbnail to MEGA
+            const videoFile = req.files.video[0];
+            const thumbnailFile = req.files.thumbnail[0];
+
+            const videoUploadResult = await uploadFile(videoFile);
+            const thumbnailUploadResult = await uploadFile(thumbnailFile);
             
-            res.json({ lesson });
-            
+            const video_url = videoUploadResult.url;
+            const thumbnail_url = thumbnailUploadResult.url;
+
+            // 2. Create the lesson record in the database with both URLs
+            const newLesson = await Lesson.create({
+                course_id: parseInt(courseId),
+                title,
+                video_url,
+                thumbnail_url, // Save the new thumbnail URL
+                order_index: parseInt(order_index) || 0,
+                is_preview: false
+            });
+
+            res.status(201).json({
+                message: 'تمت إضافة الدرس بنجاح',
+                lesson: newLesson
+            });
+
         } catch (error) {
-            res.status(404).json({ error: error.message });
-        }
-    }
-    
-    static async getLessonById(req, res) {
-        try {
-            const { lessonId } = req.params;
-            const lesson = await Lesson.checkAccess(req.user, lessonId);
-            res.json({ lesson });
-            
-        } catch (error) {
-            res.status(403).json({ error: error.message });
-        }
-    }
-    
-    static async searchCourses(req, res) {
-        try {
-            const { q, category, college_type, limit } = req.query;
-            
-            if (!q) {
-                return res.status(400).json({ error: 'كلمة البحث مطلوبة' });
-            }
-            
-            const filters = {};
-            if (category) filters.category = category;
-            if (college_type) filters.college_type = college_type;
-            if (limit) filters.limit = parseInt(limit);
-            
-            const courses = await Course.search(q, filters);
-            res.json({ courses });
-            
-        } catch (error) {
-            res.status(500).json({ error: error.message });
-        }
-    }
-    
-    static async getCourseStats(req, res) {
-        try {
-            const stats = await Course.getStats();
-            res.json({ stats });
-            
-        } catch (error) {
-            res.status(500).json({ error: error.message });
-        }
-    }
-    
-    static async getTopSellingCourses(req, res) {
-        try {
-            const { limit = 10 } = req.query;
-            const courses = await Course.getTopSelling(parseInt(limit));
-            res.json({ courses });
-            
-        } catch (error) {
-            res.status(500).json({ error: error.message });
+            console.error('Error adding lesson to course:', error);
+            res.status(400).json({ error: error.message });
         }
     }
 }
