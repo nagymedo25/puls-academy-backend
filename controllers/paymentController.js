@@ -5,9 +5,16 @@ const Enrollment = require("../models/Enrollment");
 const Notification = require("../models/Notification");
 const Course = require("../models/Course");
 const { uploadFile } = require("../config/storage");
+const fs = require('fs');
+const util = require('util');
+
+// Promisify fs functions to use them with async/await
+const readFile = util.promisify(fs.readFile);
+const unlinkFile = util.promisify(fs.unlink);
 
 class PaymentController {
   static async createPayment(req, res) {
+    let tempFilePath = null;
     try {
       const { course_id, amount, method } = req.body;
       const user_id = req.user.userId;
@@ -20,32 +27,36 @@ class PaymentController {
         return res.status(400).json({ error: "صورة الإيصال مطلوبة" });
       }
 
-      const course = await Course.findById(course_id);
-      if (parseFloat(amount) !== parseFloat(course.price)) {
-        return res
-          .status(400)
-          .json({ error: "المبلغ غير متطابق مع سعر الكورس" });
-      }
+      tempFilePath = req.file.path;
+      // Read the file from the temporary path provided by diskStorage
+      const buffer = await readFile(tempFilePath);
+      const fileToUpload = { originalname: req.file.originalname, buffer };
 
-      // تم تعديل هذا الجزء: استدعاء uploadFile مباشرة
-      const uploadResult = await uploadFile(req.file);
+      // Upload the file buffer to MEGA
+      const uploadResult = await uploadFile(fileToUpload);
+      const screenshot_url = uploadResult.url;
+
+      // Clean up the temporary file from the disk
+      await unlinkFile(tempFilePath);
+      tempFilePath = null;
 
       const payment = await Payment.create({
         user_id,
         course_id,
         amount: parseFloat(amount),
         method,
-        // نستخدم الآن معرف الملف (ID) من Google Drive
-        screenshot_path: uploadResult.url,
+        screenshot_path: screenshot_url, // Save the final URL
       });
 
+      const course = await Course.findById(course_id);
       await Notification.createPaymentPending(user_id, course.title);
 
-      res.status(201).json({
-        message: "تم إرسال طلب الدفع بنجاح",
-        payment,
-      });
+      res.status(201).json({ message: "تم إرسال طلب الدفع بنجاح", payment });
     } catch (error) {
+      // If an error occurs, ensure the temporary file is deleted
+      if (tempFilePath) {
+          try { await unlinkFile(tempFilePath); } catch (e) { console.error("Error cleaning up temp file:", e); }
+      }
       res.status(400).json({ error: error.message });
     }
   }
@@ -101,7 +112,6 @@ class PaymentController {
   static async approvePayment(req, res) {
     try {
       const { paymentId } = req.params;
-      // أولاً، قم بالموافقة على الدفع
       await Payment.approve(paymentId);
 
       const updatedPayment = await Payment.findById(paymentId);

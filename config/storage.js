@@ -3,12 +3,9 @@
 const { Storage } = require('megajs');
 const { Readable } = require('stream');
 
-// متغير لتخزين الاتصال بـ MEGA لتجنب إعادة تسجيل الدخول مع كل عملية رفع
 let megaStorage = null;
 
-// دالة للاتصال بحساب MEGA
 async function connectToMega() {
-  // إذا كان الاتصال موجودًا بالفعل، قم بإرجاعه
   if (megaStorage && megaStorage.root) {
     return megaStorage;
   }
@@ -20,14 +17,12 @@ async function connectToMega() {
       password: process.env.MEGA_PASSWORD,
     });
 
-    // انتظر حتى يصبح الاتصال جاهزًا
     await new Promise((resolve, reject) => {
       storage.on('ready', () => {
         console.log('Successfully connected to MEGA!');
         megaStorage = storage;
         resolve();
       });
-
       storage.on('error', (err) => {
         console.error('Failed to connect to MEGA:', err);
         reject(err);
@@ -37,60 +32,69 @@ async function connectToMega() {
     return megaStorage;
   } catch (error) {
     console.error('Error during MEGA connection setup:', error);
-    megaStorage = null; // إعادة تعيين في حالة الفشل
+    megaStorage = null;
     throw new Error('Failed to initialize MEGA connection.');
   }
 }
 
-// دالة لرفع ملف إلى MEGA مع إظهار التقدم
+// --- NEW, MORE ROBUST UPLOAD FUNCTION ---
+// This function wraps the entire stream-based upload process in a Promise
+// to ensure it always resolves or rejects correctly, preventing hangs.
 async function uploadFile(file) {
-  try {
-    const storage = await connectToMega();
-    if (!storage) {
-        throw new Error('MEGA connection is not available.');
-    }
+  return new Promise(async (resolve, reject) => {
+    try {
+      const storage = await connectToMega();
+      if (!storage) {
+        return reject(new Error('MEGA connection is not available.'));
+      }
 
-    const { originalname, buffer } = file;
+      const { originalname, buffer } = file;
+      const fileStream = Readable.from(buffer);
 
-    // تحويل الـ buffer إلى stream
-    const fileStream = Readable.from(buffer);
-
-    // إنشاء عملية الرفع
-    const uploadStream = storage.upload({
+      const uploadStream = storage.upload({
         name: originalname,
-        size: buffer.length
-    }, fileStream);
+        size: buffer.length,
+      }, fileStream);
 
-    // NEW: Listen for progress events and log them to the console
-    uploadStream.on('progress', (progress) => {
-        const percentage = Math.round(progress.bytesLoaded / progress.bytesTotal * 100);
-        // طباعة شريط التقدم في الـ console
+      // Listen for progress events
+      uploadStream.on('progress', (progress) => {
+        const percentage = Math.round((progress.bytesLoaded / progress.bytesTotal) * 100);
         process.stdout.write(`Uploading ${originalname}: ${percentage}% complete\r`);
-    });
+      });
 
-    // انتظار اكتمال الرفع
-    const uploadedFile = await uploadStream.complete;
-    
-    // طباعة سطر جديد بعد اكتمال الرفع
-    process.stdout.write('\n'); 
+      // Listen for the 'error' event on the stream
+      uploadStream.on('error', (err) => {
+        console.error(`\nError during MEGA upload for ${originalname}:`, err);
+        return reject(new Error('Failed to upload file to MEGA.'));
+      });
 
-    // الحصول على رابط عام للملف
-    const link = await uploadedFile.link(true); // true to get the key
+      // Listen for the 'complete' event, which signifies success
+      uploadStream.on('complete', async (uploadedFile) => {
+        try {
+          process.stdout.write('\n');
+          console.log(`File uploaded to MEGA: ${originalname}`);
+          
+          const link = await uploadedFile.link(true);
+          
+          // Resolve the promise with the final result
+          resolve({
+            url: link,
+            id: uploadedFile.handle,
+          });
+        } catch (linkError) {
+           console.error(`\nError getting link for ${originalname}:`, linkError);
+           reject(new Error('File uploaded but failed to get link.'));
+        }
+      });
 
-    console.log(`File uploaded to MEGA: ${originalname}`);
-
-    // إرجاع الرابط ومعرف الملف
-    return {
-      url: link,
-      id: uploadedFile.handle 
-    };
-  } catch (error) {
-    console.error('Error uploading file to MEGA:', error);
-    throw new Error('Failed to upload file to MEGA.');
-  }
+    } catch (error) {
+      console.error('\nError in uploadFile function wrapper:', error);
+      reject(error);
+    }
+  });
 }
 
-// دالة لحذف ملف من MEGA
+
 async function deleteFile(fileId) {
     try {
         const storage = await connectToMega();

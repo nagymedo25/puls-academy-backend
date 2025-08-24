@@ -3,7 +3,6 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 
-// إعدادات JWT
 const JWT_SECRET = process.env.JWT_SECRET || 'puls-academy-secret-key';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
