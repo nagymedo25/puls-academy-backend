@@ -4,17 +4,39 @@ const Payment = require("../models/Payment");
 const Enrollment = require("../models/Enrollment");
 const Notification = require("../models/Notification");
 const Course = require("../models/Course");
-const { uploadFile } = require("../config/storage");
 const fs = require('fs');
+const path = require('path');
 const util = require('util');
 
-// Promisify fs functions to use them with async/await
-const readFile = util.promisify(fs.readFile);
+// تحويل fs.unlink إلى دالة Promise
 const unlinkFile = util.promisify(fs.unlink);
+
+// دالة لتكوين الرابط الكامل للصورة
+const getFullImageUrl = (req, filename) => {
+  return `${req.protocol}://${req.get('host')}/uploads/${filename}`;
+};
+
+// دالة لحذف الصورة من الخادم
+const deleteScreenshot = async (screenshotPath) => {
+    try {
+        if (!screenshotPath) return;
+        const url = new URL(screenshotPath);
+        const filename = path.basename(url.pathname);
+        const filePath = path.join(__dirname, '../uploads', filename);
+
+        // التحقق من وجود الملف قبل محاولة حذفه
+        if (fs.existsSync(filePath)) {
+            await unlinkFile(filePath);
+            console.log(`Successfully deleted local file: ${filename}`);
+        }
+    } catch (error) {
+        console.error(`Error deleting local file for path ${screenshotPath}:`, error);
+    }
+};
+
 
 class PaymentController {
   static async createPayment(req, res) {
-    let tempFilePath = null;
     try {
       const { course_id, amount, method } = req.body;
       const user_id = req.user.userId;
@@ -27,25 +49,15 @@ class PaymentController {
         return res.status(400).json({ error: "صورة الإيصال مطلوبة" });
       }
 
-      tempFilePath = req.file.path;
-      // Read the file from the temporary path provided by diskStorage
-      const buffer = await readFile(tempFilePath);
-      const fileToUpload = { originalname: req.file.originalname, buffer };
-
-      // Upload the file buffer to MEGA
-      const uploadResult = await uploadFile(fileToUpload);
-      const screenshot_url = uploadResult.url;
-
-      // Clean up the temporary file from the disk
-      await unlinkFile(tempFilePath);
-      tempFilePath = null;
+      // --- تعديل: استخدام الرابط المحلي المباشر ---
+      const screenshot_url = getFullImageUrl(req, req.file.filename);
 
       const payment = await Payment.create({
         user_id,
         course_id,
         amount: parseFloat(amount),
         method,
-        screenshot_path: screenshot_url, // Save the final URL
+        screenshot_path: screenshot_url, // حفظ الرابط المحلي
       });
 
       const course = await Course.findById(course_id);
@@ -53,15 +65,79 @@ class PaymentController {
 
       res.status(201).json({ message: "تم إرسال طلب الدفع بنجاح", payment });
     } catch (error) {
-      // If an error occurs, ensure the temporary file is deleted
-      if (tempFilePath) {
-          try { await unlinkFile(tempFilePath); } catch (e) { console.error("Error cleaning up temp file:", e); }
-      }
       res.status(400).json({ error: error.message });
     }
   }
 
-  static async getPayments(req, res) {
+  static async approvePayment(req, res) {
+    try {
+      const { paymentId } = req.params;
+      
+      // جلب بيانات الدفع قبل التحديث للحصول على رابط الصورة
+      const paymentToProcess = await Payment.findById(paymentId);
+      if (!paymentToProcess) {
+          return res.status(404).json({ error: "طلب الدفع غير موجود" });
+      }
+
+      await Payment.approve(paymentId);
+      const updatedPayment = await Payment.findById(paymentId);
+
+      await Enrollment.create({
+        user_id: updatedPayment.user_id,
+        course_id: updatedPayment.course_id,
+        payment_id: updatedPayment.payment_id,
+        status: "active",
+      });
+      await Notification.createPaymentApproved(
+        updatedPayment.user_id,
+        updatedPayment.course_title
+      );
+
+      // --- تعديل: حذف الصورة بعد الموافقة ---
+      await deleteScreenshot(paymentToProcess.screenshot_path);
+
+      res.json({
+        message: "تم اعتماد الدفع بنجاح",
+        payment: updatedPayment,
+      });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  static async rejectPayment(req, res) {
+    try {
+      const { paymentId } = req.params;
+      
+      // جلب بيانات الدفع قبل التحديث
+      const paymentToProcess = await Payment.findById(paymentId);
+      if (!paymentToProcess) {
+        return res.status(404).json({ error: "طلب الدفع غير موجود" });
+      }
+
+      const payment = await Payment.reject(paymentId);
+
+      await Notification.createPaymentRejected(
+        payment.user_id,
+        payment.course_title
+      );
+
+      // --- تعديل: حذف الصورة بعد الرفض ---
+      await deleteScreenshot(paymentToProcess.screenshot_path);
+
+      res.json({
+        message: "تم رفض الدفع",
+        payment,
+      });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  // ... باقي دوال المتحكم (getPayments, getPaymentById, etc.) تبقى كما هي ...
+  // ... The rest of the controller methods (getPayments, etc.) remain unchanged ...
+
+    static async getPayments(req, res) {
     try {
       const { status, user_id, course_id, method, limit, offset } = req.query;
 
@@ -108,55 +184,8 @@ class PaymentController {
       res.status(500).json({ error: error.message });
     }
   }
-
-  static async approvePayment(req, res) {
-    try {
-      const { paymentId } = req.params;
-      await Payment.approve(paymentId);
-
-      const updatedPayment = await Payment.findById(paymentId);
-
-      await Enrollment.create({
-        user_id: updatedPayment.user_id,
-        course_id: updatedPayment.course_id,
-        payment_id: updatedPayment.payment_id,
-        status: "active",
-      });
-      await Notification.createPaymentApproved(
-        updatedPayment.user_id,
-        updatedPayment.course_title
-      );
-
-      res.json({
-        message: "تم اعتماد الدفع بنجاح",
-        payment: updatedPayment,
-      });
-    } catch (error) {
-      res.status(400).json({ error: error.message });
-    }
-  }
-
-  static async rejectPayment(req, res) {
-    try {
-      const { paymentId } = req.params;
-
-      const payment = await Payment.reject(paymentId);
-
-      await Notification.createPaymentRejected(
-        payment.user_id,
-        payment.course_title
-      );
-
-      res.json({
-        message: "تم رفض الدفع",
-        payment,
-      });
-    } catch (error) {
-      res.status(400).json({ error: error.message });
-    }
-  }
-
-  static async getPaymentStats(req, res) {
+  
+    static async getPaymentStats(req, res) {
     try {
       const stats = await Payment.getStats();
       res.json({ stats });

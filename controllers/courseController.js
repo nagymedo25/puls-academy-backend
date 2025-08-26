@@ -3,14 +3,7 @@
 const Course = require("../models/Course");
 const Lesson = require("../models/Lesson");
 const Enrollment = require("../models/Enrollment");
-const Payment = require("../models/Payment");
-const { uploadFile } = require("../config/storage");
-const fs = require("fs");
-const util = require("util");
-
-// Promisify fs functions to use them with async/await
-const readFile = util.promisify(fs.readFile);
-const unlinkFile = util.promisify(fs.unlink);
+const { isValidVideoUrl, convertGoogleDriveLink } = require("../utils/helpers");
 
 class CourseController {
   static async getAllCourses(req, res) {
@@ -52,66 +45,70 @@ class CourseController {
     }
   }
 
-  static async createCourse(req, res) {
-    try {
-      const { title, description, category, college_type, price, video_url } =
-        req.body;
+    static async createCourse(req, res) {
+        try {
+            const { title, description, category, college_type, price, preview_url, thumbnail_url } = req.body;
 
-      // --- التحقق من رابط الفيديو ---
-      if (!video_url || !(await isValidVideoUrl(video_url))) {
-        return res.status(400).json({
-          error: "رابط فيديو المعاينة غير صالح أو لا يمكن الوصول إليه.",
-        });
-      }
+            if (!title || !description || !category || !college_type || !price || !preview_url || !thumbnail_url) {
+                return res.status(400).json({ error: "جميع الحقول مطلوبة" });
+            }
 
-      const course = await Course.create({
-        title,
-        description,
-        category,
-        college_type,
-        price: parseFloat(price),
-        preview_url: video_url,
-      });
+            // --- 2. تحويل الروابط تلقائيًا ---
+            const directPreviewUrl = convertGoogleDriveLink(preview_url);
+            const directThumbnailUrl = convertGoogleDriveLink(thumbnail_url);
 
-      res.status(201).json({ message: "تم إنشاء الكورس بنجاح", course });
-    } catch (error) {
-      res.status(400).json({ error: error.message });
-    }
-  }
+            if (!(await isValidVideoUrl(directPreviewUrl))) {
+                return res.status(400).json({ error: "رابط فيديو المعاينة غير صالح" });
+            }
 
-  static async updateCourse(req, res) {
-    try {
-      const { courseId } = req.params;
-      const { title, description, category, college_type, price, video_url } =
-        req.body;
+            const course = await Course.create({
+                title,
+                description,
+                category,
+                college_type,
+                price: parseFloat(price),
+                preview_url: directPreviewUrl,      // حفظ الرابط المباشر
+                thumbnail_url: directThumbnailUrl,  // حفظ الرابط المباشر
+            });
 
-      const courseData = {};
-      if (title !== undefined) courseData.title = title;
-      if (description !== undefined) courseData.description = description;
-      if (category !== undefined) courseData.category = category;
-      if (college_type !== undefined) courseData.college_type = college_type;
-      if (price !== undefined) courseData.price = parseFloat(price);
-
-      // --- التحقق من رابط الفيديو إذا تم توفيره ---
-      if (video_url) {
-        if (!(await isValidVideoUrl(video_url))) {
-          return res.status(400).json({
-            error: "رابط فيديو المعاينة غير صالح أو لا يمكن الوصول إليه.",
-          });
+            res.status(201).json({ message: "تم إنشاء الكورس بنجاح", course });
+        } catch (error) {
+            res.status(400).json({ error: error.message });
         }
-        courseData.preview_url = video_url;
-      }
-
-      const updatedCourse = await Course.update(courseId, courseData);
-
-      res.json({
-        message: "تم تحديث الكورس بنجاح",
-        course: updatedCourse,
-      });
-    } catch (error) {
-      res.status(400).json({ error: error.message });
     }
-  }
+
+    static async updateCourse(req, res) {
+        try {
+            const { courseId } = req.params;
+            const { title, description, category, college_type, price, preview_url, thumbnail_url } = req.body;
+
+            const courseData = {};
+            if (title) courseData.title = title;
+            if (description) courseData.description = description;
+            if (category) courseData.category = category;
+            if (college_type) courseData.college_type = college_type;
+            if (price) courseData.price = parseFloat(price);
+
+            // --- 3. تحويل الروابط عند التحديث أيضًا ---
+            if (preview_url) {
+                const directUrl = convertGoogleDriveLink(preview_url);
+                if (!(await isValidVideoUrl(directUrl))) {
+                   return res.status(400).json({ error: "رابط فيديو المعاينة غير صالح" });
+                }
+                courseData.preview_url = directUrl;
+            }
+            if (thumbnail_url) {
+                courseData.thumbnail_url = convertGoogleDriveLink(thumbnail_url);
+            }
+
+            const updatedCourse = await Course.update(courseId, courseData);
+
+            res.json({ message: "تم تحديث الكورس بنجاح", course: updatedCourse });
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    }
+
   static async deleteCourse(req, res) {
     try {
       const { courseId } = req.params;
@@ -203,59 +200,36 @@ class CourseController {
     }
   }
 
-  static async addLessonToCourse(req, res) {
-    let tempThumbnailPath = null;
-    try {
-      const { courseId } = req.params;
-      const { title, order_index, video_url } = req.body;
-
-      // --- التحقق من رابط الفيديو ---
-      if (!video_url || !(await isValidVideoUrl(video_url))) {
-        return res
-          .status(400)
-          .json({ error: "رابط الفيديو غير صالح أو لا يمكن الوصول إليه." });
-      }
-
-      if (!title || !req.file) {
-        return res
-          .status(400)
-          .json({ error: "عنوان الدرس والصورة المصغرة مطلوبان" });
-      }
-
-      const thumbnailFile = req.file;
-      tempThumbnailPath = thumbnailFile.path;
-
-      const thumbnailBuffer = await readFile(tempThumbnailPath);
-      const thumbnailToUpload = {
-        originalname: thumbnailFile.originalname,
-        buffer: thumbnailBuffer,
-      };
-      const thumbnailUploadResult = await uploadFile(thumbnailToUpload);
-      await unlinkFile(tempThumbnailPath);
-      tempThumbnailPath = null;
-
-      const newLesson = await Lesson.create({
-        course_id: parseInt(courseId),
-        title,
-        video_url: video_url,
-        thumbnail_url: thumbnailUploadResult.url,
-        order_index: parseInt(order_index) || 0,
-        is_preview: false,
-      });
-
-      res
-        .status(201)
-        .json({ message: "تمت إضافة الدرس بنجاح", lesson: newLesson });
-    } catch (error) {
-      if (tempThumbnailPath) {
+    static async addLessonToCourse(req, res) {
         try {
-          await unlinkFile(tempThumbnailPath);
-        } catch (e) {}
-      }
-      console.error("Error adding lesson to course:", error);
-      res.status(400).json({ error: error.message });
+            const { courseId } = req.params;
+            const { title, order_index, video_url, thumbnail_url } = req.body;
+
+            if (!title || !video_url || !thumbnail_url) {
+                return res.status(400).json({ error: "كل الحقول مطلوبة" });
+            }
+            
+            // --- 4. تحويل روابط الدرس تلقائيًا ---
+            const directVideoUrl = convertGoogleDriveLink(video_url);
+            const directThumbnailUrl = convertGoogleDriveLink(thumbnail_url);
+
+            if (!(await isValidVideoUrl(directVideoUrl))) {
+                return res.status(400).json({ error: "رابط الفيديو غير صالح" });
+            }
+            
+            const newLesson = await Lesson.create({
+                course_id: parseInt(courseId),
+                title,
+                video_url: directVideoUrl,
+                thumbnail_url: directThumbnailUrl,
+                order_index: parseInt(order_index) || 0,
+            });
+
+            res.status(201).json({ message: "تمت إضافة الدرس بنجاح", lesson: newLesson });
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
     }
-  }
 }
 
 module.exports = CourseController;

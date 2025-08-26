@@ -36,6 +36,7 @@ const createTables = () => {
             category TEXT NOT NULL CHECK(category IN ('pharmacy', 'dentistry')),
             college_type TEXT NOT NULL CHECK(college_type IN ('male', 'female')),
             price REAL NOT NULL,
+            thumbnail_url TEXT, -- <<<--- تمت إضافة هذا الحقل
             preview_url TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
