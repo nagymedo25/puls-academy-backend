@@ -3,7 +3,7 @@
 const Course = require("../models/Course");
 const Lesson = require("../models/Lesson");
 const Enrollment = require("../models/Enrollment");
-const { isValidVideoUrl, convertGoogleDriveLink } = require("../utils/helpers");
+// تم حذف الدوال الخاصة بـ Google Drive لأنها لم تعد ضرورية
 
 class CourseController {
   static async getAllCourses(req, res) {
@@ -47,23 +47,25 @@ class CourseController {
 
   static async createCourse(req, res) {
     try {
-      const { title, description, category, college_type, price, preview_url, thumbnail_url } = req.body;
+      const {
+        title,
+        description,
+        category,
+        college_type,
+        price,
+        preview_url,
+        thumbnail_url,
+      } = req.body;
 
-      // ✨ التعديل: تحويل رابط الفيديو فقط
-      const directPreviewUrl = convertGoogleDriveLink(preview_url);
-
-      if (!(await isValidVideoUrl(directPreviewUrl))) {
-        return res.status(400).json({ error: "رابط فيديو المعاينة غير صالح أو لا يمكن الوصول إليه" });
-      }
-
+      // يتم الآن حفظ الروابط المباشرة من Bunny.net كما هي
       const course = await Course.create({
         title,
         description,
         category,
         college_type,
         price: parseFloat(price),
-        preview_url: directPreviewUrl, // استخدام الرابط المحوّل
-        thumbnail_url: thumbnail_url,  // استخدام رابط الصورة كما هو
+        preview_url: preview_url,
+        thumbnail_url: thumbnail_url,
       });
 
       res.status(201).json({ message: "تم إنشاء الكورس بنجاح", course });
@@ -77,18 +79,9 @@ class CourseController {
       const { courseId } = req.params;
       const courseDataToUpdate = { ...req.body };
 
-      // ✨ التعديل: إذا كان رابط الفيديو موجودًا في الطلب، قم بتحويله
-      if (courseDataToUpdate.preview_url) {
-        const directUrl = convertGoogleDriveLink(courseDataToUpdate.preview_url);
-        if (!(await isValidVideoUrl(directUrl))) {
-          return res.status(400).json({ error: "رابط فيديو المعاينة غير صالح" });
-        }
-        courseDataToUpdate.preview_url = directUrl;
-      }
-      
-      // رابط الصورة المصغرة يتم تحديثه كما هو بدون تحويل
+      // يتم تحديث السعر إذا تم إرساله
       if (courseDataToUpdate.price) {
-          courseDataToUpdate.price = parseFloat(courseDataToUpdate.price);
+        courseDataToUpdate.price = parseFloat(courseDataToUpdate.price);
       }
 
       const updatedCourse = await Course.update(courseId, courseDataToUpdate);
@@ -190,36 +183,30 @@ class CourseController {
     }
   }
 
-    static async addLessonToCourse(req, res) {
-        try {
-            const { courseId } = req.params;
-            const { title, order_index, video_url, thumbnail_url } = req.body;
+  static async addLessonToCourse(req, res) {
+    try {
+      const { courseId } = req.params;
+      const { title, order_index, video_url, thumbnail_url } = req.body;
 
-            if (!title || !video_url || !thumbnail_url) {
-                return res.status(400).json({ error: "كل الحقول مطلوبة" });
-            }
-            
-            // --- 4. تحويل روابط الدرس تلقائيًا ---
-            const directVideoUrl = convertGoogleDriveLink(video_url);
-            const directThumbnailUrl = convertGoogleDriveLink(thumbnail_url);
+      if (!title || !video_url || !thumbnail_url) {
+        return res.status(400).json({ error: "كل الحقول مطلوبة" });
+      }
 
-            if (!(await isValidVideoUrl(directVideoUrl))) {
-                return res.status(400).json({ error: "رابط الفيديو غير صالح" });
-            }
-            
-            const newLesson = await Lesson.create({
-                course_id: parseInt(courseId),
-                title,
-                video_url: directVideoUrl,
-                thumbnail_url: directThumbnailUrl,
-                order_index: parseInt(order_index) || 0,
-            });
+      const newLesson = await Lesson.create({
+        course_id: parseInt(courseId),
+        title,
+        video_url: video_url,
+        thumbnail_url: thumbnail_url,
+        order_index: parseInt(order_index) || 0,
+      });
 
-            res.status(201).json({ message: "تمت إضافة الدرس بنجاح", lesson: newLesson });
-        } catch (error) {
-            res.status(400).json({ error: error.message });
-        }
+      res
+        .status(201)
+        .json({ message: "تمت إضافة الدرس بنجاح", lesson: newLesson });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
     }
+  }
 }
 
 module.exports = CourseController;

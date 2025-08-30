@@ -10,20 +10,21 @@ const { validateCourseCreation } = require('../middlewares/validationMiddleware'
 
 // --- Public Routes ---
 router.get('/', CourseController.getAllCourses);
-router.get('/:courseId', CourseController.getCourseById); // <-- ✨ (يفضل إضافة هذا المسار ليعمل الكود بشكل صحيح)
+router.get('/:courseId', CourseController.getCourseById);
 router.get('/:courseId/preview', CourseController.getPreviewLesson);
-// ✨ الخطوة 1: انقل هذا السطر إلى هنا واجعل المسار عامًا
 router.get('/:courseId/lessons', CourseController.getCourseLessons);
 
 
 // --- Student Routes (Authenticated) ---
 router.get('/available', authMiddleware, CourseController.getAvailableCourses);
-// ✨ الخطوة 2: تم حذف السطر من هنا
 router.get('/:courseId/lessons/:lessonId', authMiddleware, CourseController.getLessonById);
 
 // --- Admin Routes (Authenticated & Admin) ---
 router.post('/', authMiddleware, adminMiddleware, validateCourseCreation, CourseController.createCourse);
-router.put('/:courseId', authMiddleware, adminMiddleware, CourseController.updateCourse);
+
+// ✨ التعديل هنا: تمت إضافة دالة التحقق لمسار التعديل أيضاً
+router.put('/:courseId', authMiddleware, adminMiddleware, validateCourseCreation, CourseController.updateCourse);
+
 router.delete('/:courseId', authMiddleware, adminMiddleware, CourseController.deleteCourse);
 router.post(
     '/:courseId/lessons',

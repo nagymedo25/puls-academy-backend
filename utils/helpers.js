@@ -168,57 +168,6 @@ const throttle = (func, limit) => {
   };
 };
 
-const isValidVideoUrl = async (url) => {
-  try {
-    if (!url || !url.includes("drive.google.com")) {
-      return false;
-    }
-
-    const response = await axios.head(url, {
-      httpsAgent: new (require("https").Agent)({ rejectUnauthorized: false }),
-      timeout: 5000,
-    });
-
-    // روابط المعاينة قد لا تعطي content-type صحيح دائماً، لذا نعتمد على status 200
-    if (response.status === 200) {
-      return true;
-    }
-
-    return false;
-  } catch (error) {
-    // بعض الروابط قد تنجح حتى لو فشل طلب HEAD، لذا يمكن اعتبارها صالحة كحل بديل
-    if(error.response && error.response.status < 500){
-        return true;
-    }
-    console.error("Error validating video URL:", error.message);
-    return false;
-  }
-};
-
-// --- ✨ الدالة المعدلة لتحويل روابط جوجل درايف ---
-const convertGoogleDriveLink = (url) => {
-  if (!url || !url.includes('drive.google.com')) {
-    return url; // إذا لم يكن رابط جوجل درايف، أرجعه كما هو
-  }
-
-  try {
-    // Regex للتعامل مع /d/FILE_ID/ أو /uc?id=FILE_ID
-    const regex = /(?:\/d\/|\/uc\?id=)([a-zA-Z0-9_-]{28,})/;
-    const match = url.match(regex);
-    
-    if (match && match[1]) {
-      const fileId = match[1];
-      return `https://drive.google.com/file/d/${fileId}/preview`;
-    }
-    
-    // إرجاع الرابط الأصلي إذا لم يتم العثور على ID
-    return url;
-  } catch (error) {
-    console.error("Failed to convert Google Drive link:", error);
-    return url; // أرجع الرابط الأصلي في حالة حدوث خطأ
-  }
-};
-
 
 module.exports = {
   generateRandomCode,
@@ -240,6 +189,4 @@ module.exports = {
   retryAsync,
   debounce,
   throttle,
-  isValidVideoUrl,
-  convertGoogleDriveLink // <-- الدالة المعدلة
 };
