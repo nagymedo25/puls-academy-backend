@@ -3,7 +3,7 @@
 const Course = require("../models/Course");
 const Lesson = require("../models/Lesson");
 const Enrollment = require("../models/Enrollment");
-const { isValidVideoUrl } = require("../utils/helpers");
+const { isValidVideoUrl, convertGoogleDriveLink } = require("../utils/helpers");
 
 class CourseController {
   static async getAllCourses(req, res) {
@@ -45,66 +45,59 @@ class CourseController {
     }
   }
 
-    static async createCourse(req, res) {
-        try {
-            const { title, description, category, college_type, price, preview_url, thumbnail_url } = req.body;
+  static async createCourse(req, res) {
+    try {
+      const { title, description, category, college_type, price, preview_url, thumbnail_url } = req.body;
 
-            if (!title || !description || !category || !college_type || !price || !preview_url || !thumbnail_url) {
-                return res.status(400).json({ error: "جميع الحقول مطلوبة" });
-            }
+      // ✨ التعديل: تحويل رابط الفيديو فقط
+      const directPreviewUrl = convertGoogleDriveLink(preview_url);
 
+      if (!(await isValidVideoUrl(directPreviewUrl))) {
+        return res.status(400).json({ error: "رابط فيديو المعاينة غير صالح أو لا يمكن الوصول إليه" });
+      }
 
-            if (!(await isValidVideoUrl(preview_url))) {
-                return res.status(400).json({ error: "رابط فيديو المعاينة غير صالح" });
-            }
+      const course = await Course.create({
+        title,
+        description,
+        category,
+        college_type,
+        price: parseFloat(price),
+        preview_url: directPreviewUrl, // استخدام الرابط المحوّل
+        thumbnail_url: thumbnail_url,  // استخدام رابط الصورة كما هو
+      });
 
-            const course = await Course.create({
-                title,
-                description,
-                category,
-                college_type,
-                price: parseFloat(price),
-                preview_url: preview_url,     
-                thumbnail_url: thumbnail_url, 
-            });
-
-            res.status(201).json({ message: "تم إنشاء الكورس بنجاح", course });
-        } catch (error) {
-            res.status(400).json({ error: error.message });
-        }
+      res.status(201).json({ message: "تم إنشاء الكورس بنجاح", course });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
     }
+  }
 
-    static async updateCourse(req, res) {
-        try {
-            const { courseId } = req.params;
-            const { title, description, category, college_type, price, preview_url, thumbnail_url } = req.body;
+  static async updateCourse(req, res) {
+    try {
+      const { courseId } = req.params;
+      const courseDataToUpdate = { ...req.body };
 
-            const courseData = {};
-            if (title) courseData.title = title;
-            if (description) courseData.description = description;
-            if (category) courseData.category = category;
-            if (college_type) courseData.college_type = college_type;
-            if (price) courseData.price = parseFloat(price);
-
-            // --- 3. تحويل الروابط عند التحديث أيضًا ---
-            if (preview_url) {
-                const directUrl = convertGoogleDriveLink(preview_url);
-                if (!(await isValidVideoUrl(directUrl))) {
-                   return res.status(400).json({ error: "رابط فيديو المعاينة غير صالح" });
-                }
-                courseData.preview_url = directUrl;
-            }
-            if (thumbnail_url) {
-                courseData.thumbnail_url = convertGoogleDriveLink(thumbnail_url);
-            }
-
-            const updatedCourse = await Course.update(courseId, courseData);
-
-            res.json({ message: "تم تحديث الكورس بنجاح", course: updatedCourse });
-        } catch (error) {
-            res.status(400).json({ error: error.message });
+      // ✨ التعديل: إذا كان رابط الفيديو موجودًا في الطلب، قم بتحويله
+      if (courseDataToUpdate.preview_url) {
+        const directUrl = convertGoogleDriveLink(courseDataToUpdate.preview_url);
+        if (!(await isValidVideoUrl(directUrl))) {
+          return res.status(400).json({ error: "رابط فيديو المعاينة غير صالح" });
         }
+        courseDataToUpdate.preview_url = directUrl;
+      }
+      
+      // رابط الصورة المصغرة يتم تحديثه كما هو بدون تحويل
+      if (courseDataToUpdate.price) {
+          courseDataToUpdate.price = parseFloat(courseDataToUpdate.price);
+      }
+
+      const updatedCourse = await Course.update(courseId, courseDataToUpdate);
+
+      res.json({ message: "تم تحديث الكورس بنجاح", course: updatedCourse });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
     }
+  }
 
   static async deleteCourse(req, res) {
     try {

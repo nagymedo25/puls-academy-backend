@@ -5,29 +5,26 @@ const router = express.Router();
 const CourseController = require('../controllers/courseController');
 const { authMiddleware } = require('../middlewares/authMiddleware');
 const { adminMiddleware } = require('../middlewares/adminMiddleware');
-// لم نعد بحاجة لـ uploadMiddleware هنا
-// const { uploadMiddleware } = require('../middlewares/uploadMiddleware');
+const { validateCourseCreation } = require('../middlewares/validationMiddleware');
+
 
 // --- Public Routes ---
 router.get('/', CourseController.getAllCourses);
-// ... (باقي المسارات العامة كما هي)
+router.get('/:courseId', CourseController.getCourseById); // <-- ✨ (يفضل إضافة هذا المسار ليعمل الكود بشكل صحيح)
 router.get('/:courseId/preview', CourseController.getPreviewLesson);
+// ✨ الخطوة 1: انقل هذا السطر إلى هنا واجعل المسار عامًا
+router.get('/:courseId/lessons', CourseController.getCourseLessons);
+
 
 // --- Student Routes (Authenticated) ---
 router.get('/available', authMiddleware, CourseController.getAvailableCourses);
-router.get('/:courseId/lessons', authMiddleware, CourseController.getCourseLessons);
+// ✨ الخطوة 2: تم حذف السطر من هنا
 router.get('/:courseId/lessons/:lessonId', authMiddleware, CourseController.getLessonById);
 
 // --- Admin Routes (Authenticated & Admin) ---
-// <<<--- تعديل: تمت إزالة uploadMiddleware ---
-router.post('/', authMiddleware, adminMiddleware, CourseController.createCourse);
-
-// <<<--- تعديل: تمت إزالة uploadMiddleware ---
+router.post('/', authMiddleware, adminMiddleware, validateCourseCreation, CourseController.createCourse);
 router.put('/:courseId', authMiddleware, adminMiddleware, CourseController.updateCourse);
-
 router.delete('/:courseId', authMiddleware, adminMiddleware, CourseController.deleteCourse);
-
-// <<<--- تعديل: تمت إزالة uploadMiddleware ---
 router.post(
     '/:courseId/lessons',
     authMiddleware,
