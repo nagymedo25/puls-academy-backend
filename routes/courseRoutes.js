@@ -21,17 +21,17 @@ router.get('/:courseId/lessons/:lessonId', authMiddleware, CourseController.getL
 
 // --- Admin Routes (Authenticated & Admin) ---
 router.post('/', authMiddleware, adminMiddleware, validateCourseCreation, CourseController.createCourse);
-
-// ✨ التعديل هنا: تمت إضافة دالة التحقق لمسار التعديل أيضاً
 router.put('/:courseId', authMiddleware, adminMiddleware, validateCourseCreation, CourseController.updateCourse);
-
 router.delete('/:courseId', authMiddleware, adminMiddleware, CourseController.deleteCourse);
-router.post(
-    '/:courseId/lessons',
-    authMiddleware,
-    adminMiddleware,
-    CourseController.addLessonToCourse
-);
+
+// ✨ START: تعديلات مسارات الدروس ✨
+// إضافة درس جديد لكورس
+router.post('/:courseId/lessons', authMiddleware, adminMiddleware, CourseController.addLessonToCourse);
+// جلب دروس كورس معين (للأدمن)
+router.get('/:courseId/lessons-admin', authMiddleware, adminMiddleware, CourseController.getAdminCourseLessons);
+// حذف درس معين
+router.delete('/lessons/:lessonId', authMiddleware, adminMiddleware, CourseController.deleteLesson);
+// ✨ END: نهاية تعديلات مسارات الدروس ✨
 
 
 module.exports = router;

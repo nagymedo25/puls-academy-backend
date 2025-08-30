@@ -6,18 +6,16 @@ class Lesson {
     // إنشاء درس جديد
     static async create(lessonData) {
         try {
-            // FIX: Added thumbnail_url to be saved
-            const { course_id, title, video_url, thumbnail_url, is_preview = false, order_index = 0 } = lessonData;
-            
-            // ... (التحقق من وجود الكورس كما هو) ...
+            // ✨ تم التعديل: إزالة thumbnail_url والاعتماد فقط على العنوان والفيديو
+            const { course_id, title, video_url, is_preview = false, order_index = 0 } = lessonData;
             
             const sql = `
-                INSERT INTO Lessons (course_id, title, video_url, thumbnail_url, is_preview, order_index)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO Lessons (course_id, title, video_url, is_preview, order_index)
+                VALUES (?, ?, ?, ?, ?)
             `;
             
             return new Promise((resolve, reject) => {
-                db.run(sql, [course_id, title, video_url, thumbnail_url, is_preview, order_index], function(err) {
+                db.run(sql, [course_id, title, video_url, is_preview, order_index], function(err) {
                     if (err) {
                         reject(err);
                     } else {
@@ -120,7 +118,6 @@ class Lesson {
             const updates = [];
             const values = [];
             
-            // بناء استعلام التحديث ديناميكياً
             if (title !== undefined) {
                 updates.push('title = ?');
                 values.push(title);
@@ -143,7 +140,7 @@ class Lesson {
             }
             
             values.push(lessonId);
-            const sql = `UPDATE Lessons SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE lesson_id = ?`;
+            const sql = `UPDATE Lessons SET ${updates.join(', ')} WHERE lesson_id = ?`;
             
             return new Promise((resolve, reject) => {
                 db.run(sql, values, function(err) {
@@ -167,7 +164,6 @@ class Lesson {
     // حذف درس
     static async delete(lessonId) {
         try {
-            // التحقق من وجود الدرس
             await Lesson.findById(lessonId);
             
             const sql = 'DELETE FROM Lessons WHERE lesson_id = ?';
@@ -205,129 +201,15 @@ class Lesson {
         });
     }
     
-    // إعادة ترتيب الدروس
-    static async reorderLessons(courseId, lessonOrders) {
-        try {
-            // التحقق من أن جميع الدروس تنتمي للكورس المحدد
-            const lessonIds = lessonOrders.map(lo => lo.lesson_id);
-            const placeholders = lessonIds.map(() => '?').join(',');
-            
-            const validLessons = await new Promise((resolve, reject) => {
-                db.all(
-                    `SELECT lesson_id FROM Lessons WHERE course_id = ? AND lesson_id IN (${placeholders})`,
-                    [courseId, ...lessonIds],
-                    (err, rows) => {
-                        if (err) reject(err);
-                        else resolve(rows.map(r => r.lesson_id));
-                    }
-                );
-            });
-            
-            if (validLessons.length !== lessonIds.length) {
-                throw new Error('بعض الدروس غير موجودة في هذا الكورس');
-            }
-            
-            // تحديث ترتيب الدروس
-            const updatePromises = lessonOrders.map(({ lesson_id, order_index }) => {
-                return new Promise((resolve, reject) => {
-                    db.run(
-                        'UPDATE Lessons SET order_index = ? WHERE lesson_id = ?',
-                        [order_index, lesson_id],
-                        (err) => {
-                            if (err) reject(err);
-                            else resolve();
-                        }
-                    );
-                });
-            });
-            
-            await Promise.all(updatePromises);
-            
-            return { message: 'تم إعادة ترتيب الدروس بنجاح' };
-            
-        } catch (error) {
-            throw error;
-        }
-    }
-    
-    // البحث عن دروس
-    static async search(query, courseId = null) {
-        try {
-            let sql = `
-                SELECT l.*, c.title as course_title
-                FROM Lessons l
-                JOIN Courses c ON l.course_id = c.course_id
-                WHERE l.title LIKE ?
-            `;
-            
-            const params = [`%${query}%`];
-            
-            if (courseId) {
-                sql += ' AND l.course_id = ?';
-                params.push(courseId);
-            }
-            
-            sql += ' ORDER BY l.order_index ASC, l.lesson_id ASC LIMIT 50';
-            
-            return new Promise((resolve, reject) => {
-                db.all(sql, params, (err, rows) => {
-                    if (err) {
-                        reject(err);
-                    } else {
-                        resolve(rows);
-                    }
-                });
-            });
-            
-        } catch (error) {
-            throw error;
-        }
-    }
-    
-    // الحصول على إحصائيات الدروس
-    static async getStats(courseId = null) {
-        try {
-            let sql = `
-                SELECT 
-                    COUNT(*) as total_lessons,
-                    COUNT(CASE WHEN is_preview = 1 THEN 1 END) as preview_lessons,
-                    COUNT(CASE WHEN is_preview = 0 THEN 1 END) as paid_lessons
-                FROM Lessons
-            `;
-            
-            const params = [];
-            
-            if (courseId) {
-                sql += ' WHERE course_id = ?';
-                params.push(courseId);
-            }
-            
-            return new Promise((resolve, reject) => {
-                db.get(sql, params, (err, row) => {
-                    if (err) {
-                        reject(err);
-                    } else {
-                        resolve(row);
-                    }
-                });
-            });
-            
-        } catch (error) {
-            throw error;
-        }
-    }
-    
     // التحقق من أن المستخدم يمكنه الوصول للدرس
     static async checkAccess(user, lessonId) {
         try {
             const lesson = await Lesson.findById(lessonId);
             
-            // إذا كان الدرس معاينة، يمكن الوصول له دائماً
             if (lesson.is_preview) {
                 return lesson;
             }
             
-            // التحقق من أن المستخدم مسجل في الكورس
             const isEnrolled = await new Promise((resolve, reject) => {
                 db.get(
                     'SELECT 1 FROM Enrollments WHERE user_id = ? AND course_id = ? AND status = "active"',

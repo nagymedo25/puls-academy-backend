@@ -79,8 +79,8 @@ class CourseController {
       const { courseId } = req.params;
       const courseDataToUpdate = { ...req.body };
 
-      // يتم تحديث السعر إذا تم إرساله
-      if (courseDataToUpdate.price) {
+      // ✨ تعديل: التحقق من وجود السعر بشكل صحيح للسماح بالقيمة 0
+      if (courseDataToUpdate.price !== undefined && courseDataToUpdate.price !== '') {
         courseDataToUpdate.price = parseFloat(courseDataToUpdate.price);
       }
 
@@ -183,21 +183,23 @@ class CourseController {
     }
   }
 
+
   static async addLessonToCourse(req, res) {
     try {
       const { courseId } = req.params;
-      const { title, order_index, video_url, thumbnail_url } = req.body;
+      // ✨ تم التبسيط: الآن نطلب فقط العنوان ورابط الفيديو
+      const { title, video_url } = req.body;
 
-      if (!title || !video_url || !thumbnail_url) {
-        return res.status(400).json({ error: "كل الحقول مطلوبة" });
+      if (!title || !video_url) {
+        return res
+          .status(400)
+          .json({ error: "عنوان الدرس ورابط الفيديو مطلوبان" });
       }
 
       const newLesson = await Lesson.create({
         course_id: parseInt(courseId),
         title,
-        video_url: video_url,
-        thumbnail_url: thumbnail_url,
-        order_index: parseInt(order_index) || 0,
+        video_url: video_url, // يتم حفظ الرابط مباشرة
       });
 
       res
@@ -207,6 +209,30 @@ class CourseController {
       res.status(400).json({ error: error.message });
     }
   }
+
+  // ✨ دالة جديدة لجلب دروس كورس معين للأدمن ✨
+  static async getAdminCourseLessons(req, res) {
+    try {
+        const { courseId } = req.params;
+        // لا نحتاج لتمرير المستخدم لأن الأدمن يمكنه رؤية كل الدروس
+        const lessons = await Lesson.getByCourseId(courseId);
+        res.json({ lessons });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+  }
+
+  // ✨ دالة جديدة لحذف درس معين ✨
+  static async deleteLesson(req, res) {
+      try {
+          const { lessonId } = req.params;
+          const result = await Lesson.delete(lessonId);
+          res.json(result);
+      } catch (error) {
+          res.status(400).json({ error: error.message });
+      }
+  }
 }
+
 
 module.exports = CourseController;

@@ -75,13 +75,13 @@ const validateCourseCreation = (req, res, next) => {
       thumbnail_url,
     } = req.body;
 
-    // ✨ تعديل 1: التحقق من وجود جميع الحقول المطلوبة للكورس
+    // ✨ تعديل 1: التحقق من وجود جميع الحقول بشكل دقيق
     if (
       !title ||
       !description ||
       !category ||
       !college_type ||
-      !price ||
+      price === undefined || price === '' || // <-- هذا هو الإصلاح الرئيسي
       !preview_url ||
       !thumbnail_url
     ) {
@@ -112,8 +112,6 @@ const validateCourseCreation = (req, res, next) => {
       return res.status(400).json({ error: "نوع الكلية غير صالح" });
     }
 
-    // ✨ تعديل 2: طريقة التحقق من السعر
-    // يتم تحويل السعر إلى رقم عشري والتحقق من أنه رقم صالح وموجب
     const numericPrice = parseFloat(price);
     if (isNaN(numericPrice) || numericPrice < 0) {
       return res.status(400).json({ error: "السعر يجب أن يكون رقماً موجباً" });

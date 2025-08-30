@@ -41,13 +41,11 @@ const createTables = () => {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
 
-        // جدول الدروس
         db.run(`CREATE TABLE IF NOT EXISTS Lessons (
             lesson_id INTEGER PRIMARY KEY AUTOINCREMENT,
             course_id INTEGER NOT NULL,
             title TEXT NOT NULL,
             video_url TEXT NOT NULL,
-            thumbnail_url TEXT, -- NEW: Added thumbnail URL for each lesson
             is_preview BOOLEAN DEFAULT FALSE,
             order_index INTEGER DEFAULT 0,
             FOREIGN KEY (course_id) REFERENCES Courses(course_id) ON DELETE CASCADE
