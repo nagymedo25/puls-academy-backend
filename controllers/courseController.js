@@ -3,7 +3,7 @@
 const Course = require("../models/Course");
 const Lesson = require("../models/Lesson");
 const Enrollment = require("../models/Enrollment");
-const { isValidVideoUrl, convertGoogleDriveLink } = require("../utils/helpers");
+const { isValidVideoUrl } = require("../utils/helpers");
 
 class CourseController {
   static async getAllCourses(req, res) {
@@ -53,11 +53,8 @@ class CourseController {
                 return res.status(400).json({ error: "جميع الحقول مطلوبة" });
             }
 
-            // --- 2. تحويل الروابط تلقائيًا ---
-            const directPreviewUrl = convertGoogleDriveLink(preview_url);
-            const directThumbnailUrl = convertGoogleDriveLink(thumbnail_url);
 
-            if (!(await isValidVideoUrl(directPreviewUrl))) {
+            if (!(await isValidVideoUrl(preview_url))) {
                 return res.status(400).json({ error: "رابط فيديو المعاينة غير صالح" });
             }
 
@@ -67,8 +64,8 @@ class CourseController {
                 category,
                 college_type,
                 price: parseFloat(price),
-                preview_url: directPreviewUrl,      // حفظ الرابط المباشر
-                thumbnail_url: directThumbnailUrl,  // حفظ الرابط المباشر
+                preview_url: preview_url,     
+                thumbnail_url: thumbnail_url, 
             });
 
             res.status(201).json({ message: "تم إنشاء الكورس بنجاح", course });
