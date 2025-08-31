@@ -22,7 +22,7 @@ const deleteScreenshot = async (screenshotPath) => {
         if (!screenshotPath) return;
         const url = new URL(screenshotPath);
         const filename = path.basename(url.pathname);
-        const filePath = path.join(__dirname, '../uploads', filename);
+        const filePath = path.join(__dirname, '../temp_uploads', filename);
 
         // التحقق من وجود الملف قبل محاولة حذفه
         if (fs.existsSync(filePath)) {
@@ -49,7 +49,7 @@ class PaymentController {
         return res.status(400).json({ error: "صورة الإيصال مطلوبة" });
       }
 
-      // --- تعديل: استخدام الرابط المحلي المباشر ---
+      // --- استخدام الرابط المحلي المباشر ---
       const screenshot_url = getFullImageUrl(req, req.file.filename);
 
       const payment = await Payment.create({
@@ -93,7 +93,7 @@ class PaymentController {
         updatedPayment.course_title
       );
 
-      // --- تعديل: حذف الصورة بعد الموافقة ---
+      // --- حذف الصورة بعد الموافقة ---
       await deleteScreenshot(paymentToProcess.screenshot_path);
 
       res.json({
@@ -122,7 +122,7 @@ class PaymentController {
         payment.course_title
       );
 
-      // --- تعديل: حذف الصورة بعد الرفض ---
+      // --- حذف الصورة بعد الرفض ---
       await deleteScreenshot(paymentToProcess.screenshot_path);
 
       res.json({
@@ -133,9 +133,6 @@ class PaymentController {
       res.status(400).json({ error: error.message });
     }
   }
-
-  // ... باقي دوال المتحكم (getPayments, getPaymentById, etc.) تبقى كما هي ...
-  // ... The rest of the controller methods (getPayments, etc.) remain unchanged ...
 
     static async getPayments(req, res) {
     try {

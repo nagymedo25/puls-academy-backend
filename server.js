@@ -26,7 +26,7 @@ app.use(express.json()); // لتحليل JSON في الطلبات
 app.use(express.urlencoded({ extended: true })); // لتحليل بيانات النماذج
 
 // خدمة الملفات الثابتة (مثل الصور والفيديوهات من Google Cloud)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'temp_uploads')));
 
 // مسارات API
 app.use('/api/auth', authRoutes);

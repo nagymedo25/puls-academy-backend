@@ -10,6 +10,7 @@ router.get('/dashboard', authMiddleware, adminMiddleware, AdminController.getDas
 router.get('/users', authMiddleware, adminMiddleware, AdminController.getAllUsers);
 router.get('/users/search', authMiddleware, adminMiddleware, AdminController.searchUsers);
 router.get('/users/:userId', authMiddleware, adminMiddleware, AdminController.getUserDetails);
+router.put('/users/:userId', authMiddleware, adminMiddleware, AdminController.updateUser);
 router.delete('/users/:userId', authMiddleware, adminMiddleware, AdminController.deleteUser);
 router.delete('/users/bulk', authMiddleware, adminMiddleware, AdminController.bulkDeleteUsers);
 
@@ -21,5 +22,8 @@ router.delete('/courses/bulk', authMiddleware, adminMiddleware, AdminController.
 
 router.get('/students/top', authMiddleware, adminMiddleware, AdminController.getTopStudents);
 router.get('/revenue/report', authMiddleware, adminMiddleware, AdminController.getRevenueReport);
+
+router.get('/payments/approved', authMiddleware, adminMiddleware, AdminController.getApprovedPayments);
+router.delete('/revenue/reset', authMiddleware, adminMiddleware, AdminController.resetRevenue);
 
 module.exports = router;

@@ -111,31 +111,27 @@ class CourseController {
   static async getCourseLessons(req, res) {
     try {
       const { courseId } = req.params;
-      const user = req.user; // Comes from authMiddleware
+      const user = req.user; // يأتي من authMiddleware
 
       if (!user) {
-        return res.status(401).json({ error: "المستخدم غير مصادق عليه." });
+        return res.status(401).json({ error: 'المستخدم غير مصادق عليه.' });
       }
 
-      // First, verify that the user is actively enrolled in the course.
-      const enrollment = await Enrollment.findByUserAndCourse(
-        user.userId,
-        courseId
-      );
-
-      // If there is no enrollment record or the status is not 'active', forbid access.
-      if (!enrollment || enrollment.status !== "active") {
-        return res
-          .status(403)
-          .json({ error: "ليس لديك صلاحية الوصول لدروس هذا الكورس." });
+      // الخطوة 1: التحقق من وجود اشتراك فعال للطالب في هذا الكورس
+      const enrollment = await Enrollment.findByUserAndCourse(user.userId, courseId);
+      
+      // الخطوة 2: إذا لم يكن هناك اشتراك، أو كان الاشتراك غير نشط، نرفض الوصول فوراً
+      if (!enrollment || enrollment.status !== 'active') {
+        return res.status(403).json({ error: 'ليس لديك صلاحية الوصول لدروس هذا الكورس.' });
       }
 
-      // If enrolled, fetch the list of lessons for that course.
+      // الخطوة 3: فقط إذا كان الاشتراك فعالاً، نقوم بجلب قائمة الدروس
       const lessons = await Lesson.getByCourseId(courseId, user);
       res.json({ lessons });
+
     } catch (error) {
-      // Handle any other potential errors.
-      res.status(500).json({ error: error.message });
+      // التعامل مع أي أخطاء أخرى قد تحدث
+      res.status(500).json({ error: "حدث خطأ داخلي أثناء جلب الدروس: " + error.message });
     }
   }
 

@@ -82,11 +82,6 @@ class Course {
         params.push(filters.category);
       }
 
-      if (filters.college_type) {
-        sql += " AND c.college_type = ?";
-        params.push(filters.college_type);
-      }
-
       if (filters.min_price !== undefined) {
         sql += " AND c.price >= ?";
         params.push(filters.min_price);

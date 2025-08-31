@@ -229,9 +229,11 @@ class User {
 
   // الحصول على جميع المستخدمين (للأدمن)
   static async getAll(limit = 50, offset = 0) {
+    // ✨ تم تعديل الاستعلام هنا لعرض الطلاب فقط
     const sql = `
             SELECT user_id, name, email, role, college, gender, created_at
             FROM Users 
+            WHERE role = 'student'
             ORDER BY created_at DESC 
             LIMIT ? OFFSET ?
         `;
@@ -246,10 +248,10 @@ class User {
       });
     });
   }
-
   // الحصول على عدد المستخدمين (للإحصائيات)
   static async getCount() {
-    const sql = "SELECT COUNT(*) as total FROM Users";
+    // ✨ تم إضافة شرط لاستثناء الأدمن من العد
+    const sql = "SELECT COUNT(*) as total FROM Users WHERE role = 'student'";
 
     return new Promise((resolve, reject) => {
       db.get(sql, [], (err, row) => {
