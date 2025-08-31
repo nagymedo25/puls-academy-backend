@@ -80,7 +80,10 @@ class CourseController {
       const courseDataToUpdate = { ...req.body };
 
       // ✨ تعديل: التحقق من وجود السعر بشكل صحيح للسماح بالقيمة 0
-      if (courseDataToUpdate.price !== undefined && courseDataToUpdate.price !== '') {
+      if (
+        courseDataToUpdate.price !== undefined &&
+        courseDataToUpdate.price !== ""
+      ) {
         courseDataToUpdate.price = parseFloat(courseDataToUpdate.price);
       }
 
@@ -108,11 +111,30 @@ class CourseController {
   static async getCourseLessons(req, res) {
     try {
       const { courseId } = req.params;
-      const user = req.user;
+      const user = req.user; // Comes from authMiddleware
 
+      if (!user) {
+        return res.status(401).json({ error: "المستخدم غير مصادق عليه." });
+      }
+
+      // First, verify that the user is actively enrolled in the course.
+      const enrollment = await Enrollment.findByUserAndCourse(
+        user.userId,
+        courseId
+      );
+
+      // If there is no enrollment record or the status is not 'active', forbid access.
+      if (!enrollment || enrollment.status !== "active") {
+        return res
+          .status(403)
+          .json({ error: "ليس لديك صلاحية الوصول لدروس هذا الكورس." });
+      }
+
+      // If enrolled, fetch the list of lessons for that course.
       const lessons = await Lesson.getByCourseId(courseId, user);
       res.json({ lessons });
     } catch (error) {
+      // Handle any other potential errors.
       res.status(500).json({ error: error.message });
     }
   }
@@ -141,6 +163,35 @@ class CourseController {
       res.json({ lesson });
     } catch (error) {
       res.status(403).json({ error: error.message });
+    }
+  }
+
+  static async getCourseLessons(req, res) {
+    try {
+      const { courseId } = req.params;
+      const user = req.user;
+
+      if (!user) {
+        return res.status(401).json({ error: "المستخدم غير مصادق عليه." });
+      }
+
+      // أولاً: التحقق من أن المستخدم مشترك بالفعل في الكورس وحالته "مفعّل"
+      const enrollment = await Enrollment.findByUserAndCourse(
+        user.userId,
+        courseId
+      );
+      if (!enrollment || enrollment.status !== "active") {
+        // إذا لم يكن مشتركاً، يتم منعه من الوصول
+        return res
+          .status(403)
+          .json({ error: "ليس لديك صلاحية الوصول لدروس هذا الكورس." });
+      }
+
+      // إذا كان مشتركاً، يتم جلب قائمة الدروس
+      const lessons = await Lesson.getByCourseId(courseId, user);
+      res.json({ lessons });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
     }
   }
 
@@ -183,7 +234,6 @@ class CourseController {
     }
   }
 
-
   static async addLessonToCourse(req, res) {
     try {
       const { courseId } = req.params;
@@ -213,26 +263,25 @@ class CourseController {
   // ✨ دالة جديدة لجلب دروس كورس معين للأدمن ✨
   static async getAdminCourseLessons(req, res) {
     try {
-        const { courseId } = req.params;
-        // لا نحتاج لتمرير المستخدم لأن الأدمن يمكنه رؤية كل الدروس
-        const lessons = await Lesson.getByCourseId(courseId);
-        res.json({ lessons });
+      const { courseId } = req.params;
+      // لا نحتاج لتمرير المستخدم لأن الأدمن يمكنه رؤية كل الدروس
+      const lessons = await Lesson.getByCourseId(courseId);
+      res.json({ lessons });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+      res.status(500).json({ error: error.message });
     }
   }
 
   // ✨ دالة جديدة لحذف درس معين ✨
   static async deleteLesson(req, res) {
-      try {
-          const { lessonId } = req.params;
-          const result = await Lesson.delete(lessonId);
-          res.json(result);
-      } catch (error) {
-          res.status(400).json({ error: error.message });
-      }
+    try {
+      const { lessonId } = req.params;
+      const result = await Lesson.delete(lessonId);
+      res.json(result);
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
   }
 }
-
 
 module.exports = CourseController;

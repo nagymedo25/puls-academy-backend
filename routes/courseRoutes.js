@@ -10,14 +10,22 @@ const { validateCourseCreation } = require('../middlewares/validationMiddleware'
 
 // --- Public Routes ---
 router.get('/', CourseController.getAllCourses);
+
+// --- Student Routes (Authenticated) ---
+// ✨ تم نقل هذا السطر للأعلى ليتم التعرف عليه قبل المسارات الديناميكية
+router.get('/available', authMiddleware, CourseController.getAvailableCourses);
+
+// --- Public Routes (Continued) ---
 router.get('/:courseId', CourseController.getCourseById);
 router.get('/:courseId/preview', CourseController.getPreviewLesson);
 router.get('/:courseId/lessons', CourseController.getCourseLessons);
 
 
-// --- Student Routes (Authenticated) ---
-router.get('/available', authMiddleware, CourseController.getAvailableCourses);
+
+// --- Student Routes (Authenticated Continued) ---
 router.get('/:courseId/lessons/:lessonId', authMiddleware, CourseController.getLessonById);
+router.get('/:courseId/watch/lessons', authMiddleware, CourseController.getCourseLessons); // مسار جديد لجلب الدروس لصفحة المشاهدة
+
 
 // --- Admin Routes (Authenticated & Admin) ---
 router.post('/', authMiddleware, adminMiddleware, validateCourseCreation, CourseController.createCourse);

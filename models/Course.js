@@ -7,7 +7,6 @@ class Course {
   // إنشاء كورس جديد
   static async create(courseData) {
     try {
-      // --- تمت إضافة thumbnail_url هنا ---
       const {
         title,
         description,
@@ -24,7 +23,6 @@ class Course {
             `;
 
       return new Promise((resolve, reject) => {
-        // --- تمت إضافة thumbnail_url هنا ---
         db.run(
           sql,
           [
@@ -79,7 +77,6 @@ class Course {
 
       const params = [];
 
-      // إضافة الفلاتر
       if (filters.category) {
         sql += " AND c.category = ?";
         params.push(filters.category);
@@ -102,7 +99,6 @@ class Course {
 
       sql += " ORDER BY c.created_at DESC";
 
-      // إضافة التصفح
       if (filters.limit) {
         sql += " LIMIT ?";
         params.push(filters.limit);
@@ -127,26 +123,32 @@ class Course {
     }
   }
 
-  // الحصول على الكورسات المتاحة للطالب
+  // ✨ --- START: التعديل الرئيسي هنا --- ✨
   static async getAvailableForUser(user) {
     try {
       const sql = `
-                SELECT c.*, 
-                       (SELECT COUNT(*) FROM Lessons WHERE course_id = c.course_id) as lessons_count,
-                       CASE 
-                           WHEN e.status = 'active' THEN 'enrolled'
-                           WHEN p.status = 'pending' THEN 'pending'
-                           ELSE 'available'
-                       END as enrollment_status
-                FROM Courses c
-                LEFT JOIN Enrollments e ON c.course_id = e.course_id AND e.user_id = ?
-                LEFT JOIN Payments p ON c.course_id = p.course_id AND p.user_id = ? AND p.status = 'pending'
-                WHERE c.category = ? AND c.college_type = ?
-                ORDER BY c.created_at DESC
-            `;
-
-      const params = [user.userId, user.userId, user.college, user.gender];
-
+          SELECT 
+              c.*, 
+              (SELECT COUNT(*) FROM Lessons WHERE course_id = c.course_id) as lessons_count,
+              COALESCE(
+                  (SELECT status FROM Enrollments WHERE user_id = ? AND course_id = c.course_id AND status = 'active'),
+                  (SELECT status FROM Payments WHERE user_id = ? AND course_id = c.course_id ORDER BY created_at DESC LIMIT 1),
+                  'available'
+              ) as enrollment_status
+          FROM Courses c
+          WHERE c.category = ?
+          ORDER BY 
+              CASE enrollment_status
+                  WHEN 'active' THEN 1
+                  WHEN 'pending' THEN 2
+                  WHEN 'rejected' THEN 3
+                  ELSE 4
+              END,
+              c.created_at DESC;
+      `;
+  
+      const params = [user.userId, user.userId, user.college];
+  
       return new Promise((resolve, reject) => {
         db.all(sql, params, (err, rows) => {
           if (err) {
@@ -160,6 +162,7 @@ class Course {
       throw error;
     }
   }
+  // ✨ --- END: التعديل الرئيسي هنا --- ✨
 
   // تحديث كورس
   static async update(courseId, courseData) {
@@ -172,7 +175,7 @@ class Course {
         price,
         preview_url,
         thumbnail_url,
-      } = courseData; // تمت إضافة thumbnail_url
+      } = courseData;
       const updates = [];
       const values = [];
 
@@ -200,7 +203,6 @@ class Course {
         updates.push("preview_url = ?");
         values.push(preview_url);
       }
-      // --- تمت إضافة الشرط الخاص بالصورة المصغرة ---
       if (thumbnail_url !== undefined) {
         updates.push("thumbnail_url = ?");
         values.push(thumbnail_url);
@@ -211,7 +213,6 @@ class Course {
       }
 
       values.push(courseId);
-      // <<<--- تم التعديل هنا: إزالة updated_at من الاستعلام ---
       const sql = `UPDATE Courses SET ${updates.join(
         ", "
       )} WHERE course_id = ?`;
@@ -235,7 +236,6 @@ class Course {
   // حذف كورس
   static async delete(courseId) {
     try {
-      // التحقق من وجود الكورس
       await Course.findById(courseId);
 
       const sql = "DELETE FROM Courses WHERE course_id = ?";
@@ -266,7 +266,6 @@ class Course {
 
       const params = [`%${query}%`, `%${query}%`];
 
-      // إضافة الفلاتر
       if (filters.category) {
         sql += " AND c.category = ?";
         params.push(filters.category);
@@ -279,7 +278,6 @@ class Course {
 
       sql += " ORDER BY c.created_at DESC";
 
-      // إضافة التصفح
       if (filters.limit) {
         sql += " LIMIT ?";
         params.push(filters.limit);
@@ -321,6 +319,40 @@ class Course {
           } else {
             resolve(row);
           }
+        });
+      });
+    } catch (error) {
+      throw error;
+    }
+  }
+
+    static async getCourseLessons(courseId, userId) {
+    try {
+      // التحقق مما إذا كان المستخدم مسجلاً في الكورس ومفعلاً
+      const enrollmentCheckSql = `
+        SELECT status FROM Enrollments WHERE user_id = ? AND course_id = ? AND status = 'active'
+      `;
+      const enrollment = await new Promise((resolve, reject) => {
+        db.get(enrollmentCheckSql, [userId, courseId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+
+      if (!enrollment || enrollment.status !== 'active') {
+        throw new Error('ليس لديك صلاحية الوصول لهذا الكورس.');
+      }
+
+      const sql = `
+        SELECT lesson_id, course_id, title, description, video_url, duration, lesson_order
+        FROM Lessons
+        WHERE course_id = ?
+        ORDER BY lesson_order ASC
+      `;
+      return new Promise((resolve, reject) => {
+        db.all(sql, [courseId], (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
         });
       });
     } catch (error) {
