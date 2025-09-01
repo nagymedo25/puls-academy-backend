@@ -133,14 +133,14 @@ class Payment {
   }
 
   static async deleteAll() {
-    const sql = "DELETE FROM Payments";
+    const sql = "DELETE FROM Payments WHERE status = 'approved'";
     return new Promise((resolve, reject) => {
       db.run(sql, [], function (err) {
         if (err) {
           return reject(err);
         }
         resolve({
-          message: "تم حذف جميع المدفوعات بنجاح",
+          message: "تم حذف المدفوعات المعتمدة بنجاح",
           deletedCount: this.changes,
         });
       });

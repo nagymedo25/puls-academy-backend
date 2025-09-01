@@ -8,26 +8,33 @@ const fs = require('fs');
 const path = require('path');
 const util = require('util');
 
-// تحويل fs.unlink إلى دالة Promise
 const unlinkFile = util.promisify(fs.unlink);
 
-// دالة لتكوين الرابط الكامل للصورة
 const getFullImageUrl = (req, filename) => {
   return `${req.protocol}://${req.get('host')}/uploads/${filename}`;
 };
 
-// دالة لحذف الصورة من الخادم
+// ✨ هنا تم التعديل
 const deleteScreenshot = async (screenshotPath) => {
     try {
         if (!screenshotPath) return;
-        const url = new URL(screenshotPath);
-        const filename = path.basename(url.pathname);
+
+        // الطريقة الجديدة والأكثر أمانًا لاستخراج اسم الملف من الرابط
+        const filename = screenshotPath.split('/').pop();
+        
+        if (!filename) {
+            console.error(`Could not extract filename from path: ${screenshotPath}`);
+            return;
+        }
+
         const filePath = path.join(__dirname, '../temp_uploads', filename);
 
         // التحقق من وجود الملف قبل محاولة حذفه
         if (fs.existsSync(filePath)) {
             await unlinkFile(filePath);
             console.log(`Successfully deleted local file: ${filename}`);
+        } else {
+            console.warn(`File not found, could not delete: ${filePath}`);
         }
     } catch (error) {
         console.error(`Error deleting local file for path ${screenshotPath}:`, error);
@@ -49,7 +56,6 @@ class PaymentController {
         return res.status(400).json({ error: "صورة الإيصال مطلوبة" });
       }
 
-      // --- استخدام الرابط المحلي المباشر ---
       const screenshot_url = getFullImageUrl(req, req.file.filename);
 
       const payment = await Payment.create({
@@ -57,7 +63,7 @@ class PaymentController {
         course_id,
         amount: parseFloat(amount),
         method,
-        screenshot_path: screenshot_url, // حفظ الرابط المحلي
+        screenshot_path: screenshot_url,
       });
 
       const course = await Course.findById(course_id);
@@ -73,7 +79,6 @@ class PaymentController {
     try {
       const { paymentId } = req.params;
       
-      // جلب بيانات الدفع قبل التحديث للحصول على رابط الصورة
       const paymentToProcess = await Payment.findById(paymentId);
       if (!paymentToProcess) {
           return res.status(404).json({ error: "طلب الدفع غير موجود" });
@@ -93,7 +98,7 @@ class PaymentController {
         updatedPayment.course_title
       );
 
-      // --- حذف الصورة بعد الموافقة ---
+      // استدعاء دالة الحذف
       await deleteScreenshot(paymentToProcess.screenshot_path);
 
       res.json({
@@ -109,7 +114,6 @@ class PaymentController {
     try {
       const { paymentId } = req.params;
       
-      // جلب بيانات الدفع قبل التحديث
       const paymentToProcess = await Payment.findById(paymentId);
       if (!paymentToProcess) {
         return res.status(404).json({ error: "طلب الدفع غير موجود" });
@@ -122,7 +126,7 @@ class PaymentController {
         payment.course_title
       );
 
-      // --- حذف الصورة بعد الرفض ---
+      // استدعاء دالة الحذف
       await deleteScreenshot(paymentToProcess.screenshot_path);
 
       res.json({

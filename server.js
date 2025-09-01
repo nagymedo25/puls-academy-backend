@@ -10,6 +10,8 @@ const courseRoutes = require('./routes/courseRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const messageRoutes = require('./routes/messageRoutes'); // ✨ إضافة مسارات الرسائل
+
 
 // استيراد إعدادات قاعدة البيانات
 const { initializeDatabase } = require('./config/db');
@@ -34,6 +36,7 @@ app.use('/api/courses', courseRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/messages', messageRoutes); // ✨ استخدام مسارات الرسائل
 
 // مسار رئيسي لاختبار الخادم
 app.get('/', (req, res) => {
