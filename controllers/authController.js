@@ -1,11 +1,23 @@
 // puls-academy-backend/controllers/authController.js
 
 const User = require("../models/User");
-const {
-  generateToken,
-  generateRefreshToken,
-  verifyToken,
-} = require("../config/auth");
+const { generateToken } = require("../config/auth");
+
+/**
+ * Sets the JWT token as an httpOnly cookie in the response.
+ * This is a secure way to handle authentication tokens.
+ * @param {object} res - The Express response object.
+ * @param {string} token - The JWT token.
+ */
+const sendTokenCookie = (res, token) => {
+  const cookieOptions = {
+    httpOnly: true, // The cookie only accessible by the web server
+    secure: process.env.NODE_ENV === 'production', // Makes sure cookie is sent only over HTTPS
+    sameSite: 'strict', // Protects against CSRF attacks
+    expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days expiration
+  };
+  res.cookie('token', token, cookieOptions);
+};
 
 class AuthController {
   static async register(req, res) {
@@ -16,24 +28,32 @@ class AuthController {
         return res.status(400).json({ error: "جميع الحقول مطلوبة" });
       }
 
+      // Create user and mark as verified immediately
       const user = await User.create({
         name,
         email,
         password,
         college,
         gender,
+        is_verified: true,
       });
 
+      // Generate token for the new user
       const token = generateToken(user);
-      const refreshToken = generateRefreshToken(user);
+
+      // Send token as a secure httpOnly cookie
+      sendTokenCookie(res, token);
 
       res.status(201).json({
         message: "تم إنشاء الحساب بنجاح",
-        user,
-        token,
-        refreshToken,
+        user, // Send user data for the frontend
+        token, // Also send token in body for immediate use by frontend state
       });
     } catch (error) {
+      // Handle cases like "email already exists"
+      if (error.message.includes("البريد الإلكتروني مسجل بالفعل")) {
+          return res.status(409).json({ error: error.message }); // 409 Conflict
+      }
       res.status(400).json({ error: error.message });
     }
   }
@@ -50,45 +70,24 @@ class AuthController {
 
       const user = await User.login(email, password);
       const token = generateToken(user);
-      const refreshToken = generateRefreshToken(user);
 
+      // Send token as a secure httpOnly cookie
+      sendTokenCookie(res, token);
+      
       res.json({
         message: "تم تسجيل الدخول بنجاح",
         user,
-        token,
-        refreshToken,
+        token, // Also send token in body for immediate use by frontend state
       });
     } catch (error) {
       res.status(401).json({ error: error.message });
     }
   }
 
-  static async refreshToken(req, res) {
-    try {
-      const { refreshToken } = req.body;
-
-      if (!refreshToken) {
-        return res.status(401).json({ error: "توكن التحديث مطلوب" });
-      }
-
-      const decoded = verifyToken(refreshToken);
-      const user = await User.findById(decoded.userId);
-
-      const newToken = generateToken(user);
-      const newRefreshToken = generateRefreshToken(user);
-
-      res.json({
-        token: newToken,
-        refreshToken: newRefreshToken,
-      });
-    } catch (error) {
-      res.status(401).json({ error: "توكن التحديث غير صالح" });
-    }
+  static async getProfile(req, res) {
+    // The user object is attached to req.user by the authMiddleware
+    res.json({ user: req.user });
   }
-
-    static async getProfile(req, res) {
-        res.json({ user: req.user });
-    }
 
   static async updateProfile(req, res) {
     try {
@@ -107,6 +106,9 @@ class AuthController {
         user: updatedUser,
       });
     } catch (error) {
+       if (error.message.includes("البريد الإلكتروني مسجل بالفعل")) {
+          return res.status(409).json({ error: error.message });
+      }
       res.status(400).json({ error: error.message });
     }
   }
@@ -135,7 +137,12 @@ class AuthController {
   }
 
   static async logout(req, res) {
-    res.json({ message: "تم تسجيل الخروج بنجاح" });
+    // Clear the secure cookie to log the user out
+    res.cookie('token', 'loggedout', {
+        expires: new Date(Date.now() + 10 * 1000), // Expire in 10 seconds
+        httpOnly: true,
+    });
+    res.status(200).json({ message: "تم تسجيل الخروج بنجاح" });
   }
 }
 

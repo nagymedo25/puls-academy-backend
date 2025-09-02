@@ -269,7 +269,7 @@ class User {
     const sql = `
             SELECT user_id, name, email, role, college, gender, created_at
             FROM Users 
-            WHERE name LIKE ? OR email LIKE ?
+            WHERE (name LIKE ? OR email LIKE ?) AND role = 'student' -- إضافة شرط role
             ORDER BY created_at DESC 
             LIMIT ?
         `;
