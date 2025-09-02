@@ -5,23 +5,34 @@ const router = express.Router();
 const PaymentController = require('../controllers/paymentController');
 const { authMiddleware } = require('../middlewares/authMiddleware');
 const { adminMiddleware } = require('../middlewares/adminMiddleware');
-const { uploadMiddleware } = require('../middlewares/uploadMiddleware');
 
-// ✨ --- START: التعديل الرئيسي هنا --- ✨
-// تم نقل هذا السطر للأعلى ليتم التعرف عليه أولاً
-router.get('/my-payments', authMiddleware, PaymentController.getStudentPayments);
-// ✨ --- END: التعديل الرئيسي هنا --- ✨
+// ✨ --- START: THIS IS THE CORRECTED IMPORT --- ✨
+// We are now correctly importing the 'upload' object from the middleware.
+const { upload } = require('../middlewares/uploadMiddleware');
+// ✨ --- END: THE IMPORT IS NOW CORRECT --- ✨
 
-// Admin routes
-router.get('/', authMiddleware, adminMiddleware, PaymentController.getPayments);
+// ===================================
+// ===       Admin Routes          ===
+// ===================================
+
+// Get all payments
+router.get('/', authMiddleware, adminMiddleware, PaymentController.getAllPayments);
+
+// Get pending payments
 router.get('/pending', authMiddleware, adminMiddleware, PaymentController.getPendingPayments);
-router.get('/stats', authMiddleware, adminMiddleware, PaymentController.getPaymentStats);
-router.get('/:paymentId', authMiddleware, adminMiddleware, PaymentController.getPaymentById); // هذا المسار يجب أن يكون بعد المسارات المحددة
-router.put('/:paymentId/approve', authMiddleware, adminMiddleware, PaymentController.approvePayment);
-router.put('/:paymentId/reject', authMiddleware, adminMiddleware, PaymentController.rejectPayment);
-router.delete('/:paymentId', authMiddleware, adminMiddleware, PaymentController.deletePayment);
 
-// User routes
-router.post('/', authMiddleware, uploadMiddleware.single('screenshot'), PaymentController.createPayment);
+// Update payment status (approve/reject)
+router.put('/:paymentId/status', authMiddleware, adminMiddleware, PaymentController.updatePaymentStatus);
+
+
+// ===================================
+// ===       Student Routes        ===
+// ===================================
+
+// Create a new payment request
+router.post('/', authMiddleware, upload.single('screenshot'), PaymentController.createPayment);
+
+// Get payments for the logged-in student
+router.get('/my-payments', authMiddleware, PaymentController.getStudentPayments);
 
 module.exports = router;
