@@ -43,4 +43,8 @@ const uploadMiddleware = multer({
     fileFilter: fileFilter,
 });
 
-module.exports = { uploadMiddleware };
+// ✨ --- START: THIS IS THE FIX --- ✨
+// We are exporting an object with a key named 'upload' that holds our middleware.
+// This matches the import `const { upload } = require(...)` in paymentRoutes.js
+module.exports = { upload: uploadMiddleware };
+// ✨ --- END: THE FIX IS APPLIED --- ✨
