@@ -71,13 +71,18 @@ class AuthController {
       const user = await User.login(email, password);
       const token = generateToken(user);
 
-      // Send token as a secure httpOnly cookie
-      sendTokenCookie(res, token);
+      // This part correctly SETS the cookie
+      const cookieOptions = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+      };
+      res.cookie('token', token, cookieOptions);
       
       res.json({
         message: "تم تسجيل الدخول بنجاح",
         user,
-        token, // Also send token in body for immediate use by frontend state
       });
     } catch (error) {
       res.status(401).json({ error: error.message });

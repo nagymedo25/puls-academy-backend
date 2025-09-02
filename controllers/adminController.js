@@ -10,28 +10,31 @@ const { db } = require('../config/db'); // استيراد قاعدة البيا�
 class AdminController {
     static async getDashboardStats(req, res) {
         try {
-            const [userCount, courseStats, paymentStats, enrollmentStats, notificationStats] = await Promise.all([
-                User.getCount(),
+            const [
+                studentCountResult, 
+                courseCountResult, 
+                paymentStatsResult, 
+                pendingPaymentsResult
+            ] = await Promise.all([
+                User.getCount(), 
                 Course.getStats(),
                 Payment.getStats(),
-                Enrollment.getStats(),
-                Notification.getStats()
+                Payment.countByStatus('pending')
             ]);
             
             res.json({
-                users: {
-                    total: userCount
-                },
-                courses: courseStats,
-                payments: paymentStats,
-                enrollments: enrollmentStats,
-                notifications: notificationStats
+                totalStudents: studentCountResult || 0,
+                totalCourses: courseCountResult.totalCourses || 0,
+                totalRevenue: paymentStatsResult.totalRevenue || 0,
+                pendingPaymentsCount: pendingPaymentsResult.count || 0
             });
             
         } catch (error) {
-            res.status(500).json({ error: error.message });
+            // Provide a more descriptive error message for debugging
+            res.status(500).json({ error: "فشل في جلب إحصائيات لوحة التحكم: " + error.message });
         }
     }
+    
     
     static async getAllUsers(req, res) {
         try {

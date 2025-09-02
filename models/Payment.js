@@ -272,6 +272,18 @@ class Payment {
     }
   }
 
+    static async countByStatus(status) {
+        const sql = "SELECT COUNT(*) as count FROM Payments WHERE status = ?";
+        return new Promise((resolve, reject) => {
+            db.get(sql, [status], (err, row) => {
+                if (err) {
+                    return reject(new Error("فشل في حساب عدد المدفوعات."));
+                }
+                resolve(row || { count: 0 });
+            });
+        });
+    }
+
   static async delete(paymentId) {
     try {
       await Payment.findById(paymentId);
