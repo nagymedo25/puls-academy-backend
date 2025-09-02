@@ -9,7 +9,7 @@ const { uploadMiddleware } = require('../middlewares/uploadMiddleware');
 
 // ✨ --- START: التعديل الرئيسي هنا --- ✨
 // تم نقل هذا السطر للأعلى ليتم التعرف عليه أولاً
-router.get('/my-payments', authMiddleware, PaymentController.getUserPayments);
+router.get('/my-payments', authMiddleware, PaymentController.getStudentPayments);
 // ✨ --- END: التعديل الرئيسي هنا --- ✨
 
 // Admin routes
