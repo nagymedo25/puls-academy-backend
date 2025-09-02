@@ -6,15 +6,15 @@ class MessageController {
     // جلب محادثة معينة
     static async getConversation(req, res) {
         try {
-            const currentUserId = req.user.userId;
+            // ✨ --- START: التصحيح هنا --- ✨
+            const currentUserId = req.user.user_id; // تم التعديل من userId إلى user_id
+            // ✨ --- END: التصحيح هنا --- ✨
             const otherUserId = parseInt(req.params.userId, 10);
             
-            // إذا كان المستخدم طالباً، يمكنه فقط محادثة الأدمن (user_id = 1)
             if (req.user.role === 'student' && otherUserId !== 1) {
                 return res.status(403).json({ error: 'غير مصرح لك بالوصول لهذه المحادثة.' });
             }
 
-            // عند فتح المحادثة، يتم تعليم الرسائل كمقروءة
             await Message.markAsRead(currentUserId, otherUserId);
 
             const conversation = await Message.getConversation(currentUserId, otherUserId);
@@ -27,14 +27,15 @@ class MessageController {
     // إرسال رسالة
     static async sendMessage(req, res) {
         try {
-            const sender_id = req.user.userId;
+            // ✨ --- START: التصحيح هنا --- ✨
+            const sender_id = req.user.user_id; // تم التعديل من userId إلى user_id
+            // ✨ --- END: التصحيح هنا --- ✨
             const { receiver_id, message_content } = req.body;
 
             if (!receiver_id || !message_content) {
                 return res.status(400).json({ error: 'المستقبل ونص الرسالة مطلوبان.' });
             }
 
-            // طالب يرسل للأدمن أو العكس
             if (req.user.role === 'student' && receiver_id !== 1) {
                  return res.status(403).json({ error: 'يمكن للطلاب مراسلة الأدمن فقط.' });
             }

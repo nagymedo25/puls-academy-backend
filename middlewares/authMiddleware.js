@@ -1,8 +1,12 @@
+// puls-academy-backend/middlewares/authMiddleware.js
+
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+// ✨ 1. استيراد المفتاح السري الموحّد من ملف الإعدادات
+const { JWT_SECRET } = require('../config/auth');
 
 const authMiddleware = async (req, res, next) => {
-    // ✅ [FIX] Read the token from the httpOnly cookie instead of the Authorization header.
+    // قراءة التوكن من الـ httpOnly cookie
     const token = req.cookies.token;
 
     if (!token) {
@@ -10,23 +14,22 @@ const authMiddleware = async (req, res, next) => {
     }
 
     try {
-        // Verify the token
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        // ✨ 2. استخدام المتغير المستورد للتحقق من التوكن
+        const decoded = jwt.verify(token, JWT_SECRET);
         
-        // Find the user from the database to ensure they still exist
-        // This also attaches the most up-to-date user info to the request object
+        // البحث عن المستخدم في قاعدة البيانات للتأكد من أنه لا يزال موجوداً
         const user = await User.findById(decoded.userId);
         
         if (!user) {
             return res.status(401).json({ error: 'المستخدم غير موجود.' });
         }
         
-        // Attach the safe user data to the request object
+        // إرفاق بيانات المستخدم الآمنة في كائن الطلب
         req.user = user;
         
-        next(); // Proceed to the next middleware or the route handler
+        next(); // الانتقال إلى الخطوة التالية
     } catch (error) {
-        // Handle various token errors (expired, invalid, etc.)
+        // التعامل مع أخطاء التوكن المختلفة
         if (error.name === 'TokenExpiredError') {
             return res.status(401).json({ error: 'انتهت صلاحية الجلسة، يرجى تسجيل الدخول مرة أخرى.' });
         }
