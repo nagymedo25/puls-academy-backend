@@ -52,6 +52,7 @@ const generateToken = (user) => {
 };
 
 // دالة للتحقق من توكن JWT
+// دالة للتحقق من توكن JWT
 const verifyToken = (token) => {
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
