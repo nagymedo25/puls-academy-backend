@@ -204,19 +204,15 @@ class CourseController {
   static async addLessonToCourse(req, res) {
     try {
       const { courseId } = req.params;
-      // ✨ تم التبسيط: الآن نطلب فقط العنوان ورابط الفيديو
-      const { title, video_url } = req.body;
+      const { title, description, video_url } = req.body; // ✨ إضافة
 
-      if (!title || !video_url) {
-        return res
-          .status(400)
-          .json({ error: "عنوان الدرس ورابط الفيديو مطلوبان" });
-      }
+      if (!title || !video_url) { /* ... */ }
 
       const newLesson = await Lesson.create({
         course_id: parseInt(courseId),
         title,
-        video_url: video_url, // يتم حفظ الرابط مباشرة
+        description, // ✨ إضافة
+        video_url: video_url,
       });
 
       res
@@ -226,7 +222,6 @@ class CourseController {
       res.status(400).json({ error: error.message });
     }
   }
-
   // ✨ دالة جديدة لجلب دروس كورس معين للأدمن ✨
   static async getAdminCourseLessons(req, res) {
     try {

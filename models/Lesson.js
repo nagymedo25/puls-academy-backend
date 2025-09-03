@@ -10,20 +10,21 @@ class Lesson {
       const {
         course_id,
         title,
+        description,
         video_url,
         is_preview = false,
         order_index = 0,
       } = lessonData;
 
       const sql = `
-                INSERT INTO Lessons (course_id, title, video_url, is_preview, order_index)
-                VALUES (?, ?, ?, ?, ?)
-            `;
+                INSERT INTO Lessons (course_id, title, description, video_url, is_preview, order_index)
+                VALUES (?, ?, ?, ?, ?, ?)
+            `; // ✨ تعديل
 
       return new Promise((resolve, reject) => {
         db.run(
           sql,
-          [course_id, title, video_url, is_preview, order_index],
+          [course_id, title, description, video_url, is_preview, order_index],
           function (err) {
             if (err) {
               reject(err);
@@ -122,7 +123,8 @@ class Lesson {
   // تحديث درس
   static async update(lessonId, lessonData) {
     try {
-      const { title, video_url, is_preview, order_index } = lessonData;
+      const { title, video_url, is_preview, description, order_index } =
+        lessonData;
       const updates = [];
       const values = [];
 
@@ -130,6 +132,13 @@ class Lesson {
         updates.push("title = ?");
         values.push(title);
       }
+
+      if (description !== undefined) {
+        // ✨ إضافة
+        updates.push("description = ?");
+        values.push(description);
+      }
+
       if (video_url !== undefined) {
         updates.push("video_url = ?");
         values.push(video_url);
@@ -208,14 +217,14 @@ class Lesson {
   }
 
   // التحقق من أن المستخدم يمكنه الوصول للدرس
-   static async checkAccess(user, lessonId) {
+  static async checkAccess(user, lessonId) {
     try {
       const lesson = await Lesson.findById(lessonId);
-      
+
       if (lesson.is_preview) {
         return lesson;
       }
-      
+
       const isEnrolled = await new Promise((resolve, reject) => {
         db.get(
           'SELECT 1 FROM Enrollments WHERE user_id = ? AND course_id = ? AND status = "active"',
@@ -226,11 +235,11 @@ class Lesson {
           }
         );
       });
-      
+
       if (!isEnrolled) {
-        throw new Error('يجب التسجيل في الكورس لمشاهدة هذا الدرس');
+        throw new Error("يجب التسجيل في الكورس لمشاهدة هذا الدرس");
       }
-      
+
       return lesson;
     } catch (error) {
       throw error;

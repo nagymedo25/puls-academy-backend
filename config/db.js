@@ -45,6 +45,7 @@ const createTables = () => {
             lesson_id INTEGER PRIMARY KEY AUTOINCREMENT,
             course_id INTEGER NOT NULL,
             title TEXT NOT NULL,
+            description TEXT, -- ✨ أضف هذا السطر
             video_url TEXT NOT NULL,
             is_preview BOOLEAN DEFAULT FALSE,
             order_index INTEGER DEFAULT 0,

@@ -50,13 +50,12 @@ app.use(express.urlencoded({ extended: true }));
 // ٤. تحليل الكوكيز القادمة مع الطلبات
 app.use(cookieParser());
 
-// ٥. تطبيق محدد المعدل (Rate Limiter) للحماية من هجمات Brute-Force
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // نافذة زمنية: 15 دقيقة
-  max: 150, // الحد الأقصى للطلبات لكل IP خلال النافذة الزمنية
-  standardHeaders: true, // إرسال معلومات الحد في الهيدرات القياسية
-  legacyHeaders: false, // تعطيل الهيدرات القديمة
-  message: { error: 'طلبات كثيرة جدًا من هذا الـ IP، يرجى المحاولة مرة أخرى بعد 15 دقيقة' },
+  windowMs: 1 * 60 * 1000, // ✨ تم التعديل: نافذة زمنية لدقيقة واحدة
+  max: 150, 
+  standardHeaders: true, 
+  legacyHeaders: false, 
+  message: { error: 'طلبات كثيرة جدًا من هذا الـ IP، يرجى المحاولة مرة أخرى بعد دقيقة واحدة' }, // ✨ تم تعديل الرسالة
 });
 // تطبيق المحدد على جميع المسارات التي تبدأ بـ /api/
 app.use('/api/', apiLimiter);
