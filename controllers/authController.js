@@ -12,11 +12,11 @@ const { generateToken } = require("../config/auth");
 const sendTokenCookie = (res, token) => {
   const cookieOptions = {
     httpOnly: true, // The cookie only accessible by the web server
-    secure: process.env.NODE_ENV === 'production', // Makes sure cookie is sent only over HTTPS
-    sameSite: 'strict', // Protects against CSRF attacks
+    secure: process.env.NODE_ENV === "production", // Makes sure cookie is sent only over HTTPS
+    sameSite: "strict", // Protects against CSRF attacks
     expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days expiration
   };
-  res.cookie('token', token, cookieOptions);
+  res.cookie("token", token, cookieOptions);
 };
 
 class AuthController {
@@ -52,7 +52,7 @@ class AuthController {
     } catch (error) {
       // Handle cases like "email already exists"
       if (error.message.includes("البريد الإلكتروني مسجل بالفعل")) {
-          return res.status(409).json({ error: error.message }); // 409 Conflict
+        return res.status(409).json({ error: error.message }); // 409 Conflict
       }
       res.status(400).json({ error: error.message });
     }
@@ -74,12 +74,12 @@ class AuthController {
       // This part correctly SETS the cookie
       const cookieOptions = {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
         expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       };
-      res.cookie('token', token, cookieOptions);
-      
+      res.cookie("token", token, cookieOptions);
+
       res.json({
         message: "تم تسجيل الدخول بنجاح",
         user,
@@ -97,7 +97,7 @@ class AuthController {
   static async updateProfile(req, res) {
     try {
       const { name, email, college, gender } = req.body;
-      const userId = req.user.userId;
+      const userId = req.user.user_id;
 
       const updatedUser = await User.update(userId, {
         name,
@@ -111,8 +111,8 @@ class AuthController {
         user: updatedUser,
       });
     } catch (error) {
-       if (error.message.includes("البريد الإلكتروني مسجل بالفعل")) {
-          return res.status(409).json({ error: error.message });
+      if (error.message.includes("البريد الإلكتروني مسجل بالفعل")) {
+        return res.status(409).json({ error: error.message });
       }
       res.status(400).json({ error: error.message });
     }
@@ -121,7 +121,7 @@ class AuthController {
   static async changePassword(req, res) {
     try {
       const { currentPassword, newPassword } = req.body;
-      const userId = req.user.userId;
+      const userId = req.user.user_id; 
 
       if (!currentPassword || !newPassword) {
         return res
@@ -143,9 +143,9 @@ class AuthController {
 
   static async logout(req, res) {
     // Clear the secure cookie to log the user out
-    res.cookie('token', 'loggedout', {
-        expires: new Date(Date.now() + 10 * 1000), // Expire in 10 seconds
-        httpOnly: true,
+    res.cookie("token", "loggedout", {
+      expires: new Date(Date.now() + 10 * 1000), // Expire in 10 seconds
+      httpOnly: true,
     });
     res.status(200).json({ message: "تم تسجيل الخروج بنجاح" });
   }

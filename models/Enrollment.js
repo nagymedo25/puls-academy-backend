@@ -12,17 +12,29 @@ class Enrollment {
         status = "active",
       } = enrollmentData;
 
+      // ✨
+      // ✨  التعديل الرئيسي: استخدام آلية "UPSERT"
+      // ✨  هذا الكود يقوم بإضافة تسجيل جديد، وفي حال وجود تسجيل قديم لنفس الطالب ونفس الكورس،
+      // ✨  سيقوم بتحديثه بدلاً من تجاهله، مما يضمن تفعيل الكورس دائماً.
+      // ✨
       const sql = `
-                INSERT OR IGNORE INTO Enrollments (user_id, course_id, payment_id, status)
-                VALUES (?, ?, ?, ?)
-            `;
+          INSERT INTO Enrollments (user_id, course_id, payment_id, status)
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT(user_id, course_id) DO UPDATE SET
+          payment_id = excluded.payment_id,
+          status = excluded.status,
+          enrolled_at = CURRENT_TIMESTAMP;
+      `;
 
       return new Promise((resolve, reject) => {
         db.run(sql, [user_id, course_id, payment_id, status], function (err) {
           if (err) {
             reject(err);
           } else {
-            Enrollment.findById(this.lastID).then(resolve).catch(reject);
+            // بعد التحديث أو الإضافة، نبحث عن التسجيل لإعادته كاملاً
+            Enrollment.findByUserAndCourse(user_id, course_id)
+                .then(resolve)
+                .catch(reject);
           }
         });
       });

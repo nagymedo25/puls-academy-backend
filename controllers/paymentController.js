@@ -46,7 +46,8 @@ class PaymentController {
   static async createPayment(req, res) {
     try {
       const { course_id, amount, method } = req.body;
-      const user_id = req.user.userId;
+      // ✨ التعديل الرئيسي هنا: استخلاص المعرف الصحيح من req.user
+      const user_id = req.user.user_id;
 
       if (!course_id || !amount || !method) {
         return res.status(400).json({ error: "جميع الحقول مطلوبة" });
@@ -59,8 +60,8 @@ class PaymentController {
       const screenshot_url = getFullImageUrl(req, req.file.filename);
 
       const payment = await Payment.create({
-        user_id,
-        course_id,
+        user_id, // استخدام المتغير الصحيح هنا
+        course_id: parseInt(course_id), // ✨ تحسين: تحويل course_id إلى رقم
         amount: parseFloat(amount),
         method,
         screenshot_path: screenshot_url,
@@ -74,7 +75,6 @@ class PaymentController {
       res.status(400).json({ error: error.message });
     }
   }
-
   static async approvePayment(req, res) {
     try {
       const { paymentId } = req.params;
@@ -169,7 +169,7 @@ class PaymentController {
 
   static async getUserPayments(req, res) {
     try {
-      const userId = req.user.userId;
+      const userId = req.user.user_id;
       const payments = await Payment.getByUser(userId);
       res.json({ payments });
     } catch (error) {

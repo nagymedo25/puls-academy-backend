@@ -35,7 +35,13 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // ٢. تطبيق حماية Helmet (يضيف هيدرات أمان مهمة)
-app.use(helmet());
+app.use(
+  helmet({
+    // ✨ التعديل الرئيسي هنا
+    // هذا الإعداد يسمح للواجهة الأمامية بتحميل الصور من هذا الخادم
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
 
 // ٣. تحليل جسم الطلبات (JSON و URL-encoded)
 app.use(express.json());

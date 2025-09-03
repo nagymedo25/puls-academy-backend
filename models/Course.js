@@ -142,7 +142,8 @@ class Course {
               c.created_at DESC;
       `;
   
-      const params = [user.userId, user.userId, user.college];
+      // ✨ تم تصحيح الخطأ هنا من user.userId إلى user.user_id
+      const params = [user.user_id, user.user_id, user.college];
   
       return new Promise((resolve, reject) => {
         db.all(sql, params, (err, rows) => {

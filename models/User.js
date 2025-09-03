@@ -113,13 +113,13 @@ class User {
   }
 
   // تحديث بيانات المستخدم
-  static async update(userId, userData) {
+ static async update(userId, userData) {
     try {
-      const { name, email, college, gender } = userData;
+      // ✨ بداية التعديلات
+      const { name, email, password, college, gender } = userData;
       const updates = [];
       const values = [];
 
-      // بناء استعلام التحديث ديناميكياً
       if (name !== undefined) {
         updates.push("name = ?");
         values.push(name);
@@ -136,6 +136,14 @@ class User {
         updates.push("gender = ?");
         values.push(gender);
       }
+
+      // تشفير كلمة المرور الجديدة فقط إذا تم إدخالها
+      if (password) {
+        const password_hash = await hashPassword(password);
+        updates.push("password_hash = ?");
+        values.push(password_hash);
+      }
+      // ✨ نهاية التعديلات
 
       if (updates.length === 0) {
         throw new Error("لا توجد بيانات لتحديثها");
@@ -161,7 +169,6 @@ class User {
       throw error;
     }
   }
-
   // تغيير كلمة المرور
   static async changePassword(userId, currentPassword, newPassword) {
     try {

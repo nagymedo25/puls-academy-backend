@@ -12,7 +12,7 @@ class AdminController {
         try {
             const [
                 studentCountResult, 
-                courseCountResult, 
+                courseStatsResult, // تم تغيير الاسم ليكون أوضح
                 paymentStatsResult, 
                 pendingPaymentsResult
             ] = await Promise.all([
@@ -22,15 +22,23 @@ class AdminController {
                 Payment.countByStatus('pending')
             ]);
             
+            // ✨ ---  بداية التعديل الرئيسي هنا --- ✨
+            // تم تغيير بنية الاستجابة لتتطابق مع ما يتوقعه الفرونت إند
             res.json({
-                totalStudents: studentCountResult || 0,
-                totalCourses: courseCountResult.totalCourses || 0,
-                totalRevenue: paymentStatsResult.totalRevenue || 0,
-                pendingPaymentsCount: pendingPaymentsResult.count || 0
+                users: {
+                    total: studentCountResult || 0,
+                },
+                courses: {
+                    total_courses: courseStatsResult.total_courses || 0,
+                },
+                payments: {
+                    total_revenue: paymentStatsResult.total_revenue || 0,
+                    pending_count: pendingPaymentsResult.count || 0
+                }
             });
+            // ✨ ---  نهاية التعديل الرئيسي هنا --- ✨
             
         } catch (error) {
-            // Provide a more descriptive error message for debugging
             res.status(500).json({ error: "فشل في جلب إحصائيات لوحة التحكم: " + error.message });
         }
     }

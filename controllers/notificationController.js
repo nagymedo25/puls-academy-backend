@@ -5,7 +5,7 @@ const Notification = require('../models/Notification');
 class NotificationController {
     static async getUserNotifications(req, res) {
         try {
-            const userId = req.user.userId;
+            const userId = req.user.user_id; 
             const { limit, offset, is_read } = req.query;
             
             const filters = {};
@@ -23,7 +23,7 @@ class NotificationController {
     
     static async getUnreadCount(req, res) {
         try {
-            const userId = req.user.userId;
+            const userId = req.user.user_id;
             const count = await Notification.getUnreadCount(userId);
             res.json({ unreadCount: count });
             
@@ -45,7 +45,7 @@ class NotificationController {
     
     static async markAllAsRead(req, res) {
         try {
-            const userId = req.user.userId;
+            const userId = req.user.user_id;
             const result = await Notification.markAllAsRead(userId);
             res.json(result);
             
@@ -121,7 +121,7 @@ class NotificationController {
     
     static async deleteAllUserNotifications(req, res) {
         try {
-            const userId = req.user.userId;
+            const userId = req.user.user_id;
             const result = await Notification.deleteByUser(userId);
             res.json(result);
             
