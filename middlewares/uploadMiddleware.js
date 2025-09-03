@@ -4,16 +4,21 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
+// Define a directory for temporary uploads
 const uploadDir = path.join(__dirname, '../temp_uploads');
+
+// Ensure the temporary directory exists
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir);
 }
 
+// --- Use diskStorage to save files to a temporary folder first ---
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, uploadDir);
+        cb(null, uploadDir); // Save files to the temp_uploads directory
     },
     filename: function (req, file, cb) {
+        // Use a unique filename to avoid conflicts
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
         cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
     }
@@ -31,10 +36,11 @@ const fileFilter = (req, file, cb) => {
 };
 
 const uploadMiddleware = multer({
-    storage: storage,
-    limits: { fileSize: 100 * 1024 * 1024 },
+    storage: storage, // Use the new disk storage engine
+    limits: {
+        fileSize: 100 * 1024 * 1024, // 100MB
+    },
     fileFilter: fileFilter,
 });
 
-// ✨ FIX: Export the middleware correctly. This was already correct but is confirmed here.
-module.exports = { upload: uploadMiddleware };
+module.exports = { uploadMiddleware };

@@ -11,10 +11,10 @@ class AdminController {
     static async getDashboardStats(req, res) {
         try {
             const [
-                studentCount, 
-                courseStats, 
-                paymentStats, 
-                pendingPayments
+                studentCountResult, 
+                courseCountResult, 
+                paymentStatsResult, 
+                pendingPaymentsResult
             ] = await Promise.all([
                 User.getCount(), 
                 Course.getStats(),
@@ -22,21 +22,15 @@ class AdminController {
                 Payment.countByStatus('pending')
             ]);
             
-            // FIX: Restructure the response to match frontend expectations
             res.json({
-                users: {
-                    total: studentCount || 0,
-                },
-                courses: {
-                    total_courses: courseStats.totalCourses || 0,
-                },
-                payments: {
-                    total_revenue: paymentStats.totalRevenue || 0,
-                    pending_count: pendingPayments.count || 0,
-                }
+                totalStudents: studentCountResult || 0,
+                totalCourses: courseCountResult.totalCourses || 0,
+                totalRevenue: paymentStatsResult.totalRevenue || 0,
+                pendingPaymentsCount: pendingPaymentsResult.count || 0
             });
             
         } catch (error) {
+            // Provide a more descriptive error message for debugging
             res.status(500).json({ error: "فشل في جلب إحصائيات لوحة التحكم: " + error.message });
         }
     }
