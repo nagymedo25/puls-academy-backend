@@ -5,7 +5,8 @@ const Notification = require('../models/Notification');
 class NotificationController {
     static async getUserNotifications(req, res) {
         try {
-            const userId = req.user.userId;
+            // ✨ FIX: Change req.user.userId to req.user.user_id
+            const userId = req.user.user_id;
             const { limit, offset, is_read } = req.query;
             
             const filters = {};
@@ -23,10 +24,10 @@ class NotificationController {
     
     static async getUnreadCount(req, res) {
         try {
-            const userId = req.user.userId;
+            // FIX: Changed from userId to user_id
+            const userId = req.user.user_id;
             const count = await Notification.getUnreadCount(userId);
             res.json({ unreadCount: count });
-            
         } catch (error) {
             res.status(500).json({ error: error.message });
         }

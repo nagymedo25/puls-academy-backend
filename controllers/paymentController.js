@@ -3,6 +3,7 @@
 const Payment = require('../models/Payment');
 const Enrollment = require('../models/Enrollment');
 const Notification = require('../models/Notification');
+const Course = require('../models/Course'); 
 const path = require('path');
 const fs = require('fs');
 
@@ -10,23 +11,27 @@ class PaymentController {
     // Create a new payment request
     static async createPayment(req, res) {
         try {
-            const user_id = req.user.user_id; // Correct user ID from auth
+            const user_id = req.user.user_id;
             const { course_id, amount, method } = req.body;
             
             if (!req.file) {
                 return res.status(400).json({ error: 'صورة إثبات الدفع مطلوبة.' });
             }
-            const screenshot_path = req.file.path;
+            
+            // ✅ FIX: The path stored in the database should be a URL path, not a local file system path.
+            const screenshot_path = `/uploads/${req.file.filename}`;
 
+            // The rest of your validation logic...
             const existingEnrollment = await Enrollment.findByUserAndCourse(user_id, course_id);
             if (existingEnrollment) {
-                 fs.unlinkSync(screenshot_path);
+                 fs.unlinkSync(req.file.path); // Use req.file.path to delete the temporary local file
                  return res.status(400).json({ error: 'أنت مسجل بالفعل في هذا الكورس.' });
             }
 
             const paymentData = { user_id, course_id, amount, method, screenshot_path };
             const payment = await Payment.create(paymentData);
 
+            // Notification logic...
             await Notification.create({
                 user_id: 1, // Admin's ID
                 message: `طلب دفع جديد من الطالب ${req.user.name} لكورس رقم ${course_id}`
@@ -42,10 +47,12 @@ class PaymentController {
         }
     }
 
+
     // Get all payments (for admin)
     static async getAllPayments(req, res) {
         try {
-            const payments = await Payment.findAll();
+            // FIX: Changed from findAll to getAll to match the model
+            const payments = await Payment.getAll();
             res.json(payments);
         } catch (error) {
             res.status(500).json({ error: error.message });
@@ -55,8 +62,9 @@ class PaymentController {
     // Get pending payments (for admin)
     static async getPendingPayments(req, res) {
         try {
-            const payments = await Payment.findPending();
-            res.json(payments);
+            // FIX: Changed from findPending to getPending to match the model
+            const payments = await Payment.getPending();
+            res.json({ payments }); // FIX: Wrap response in an object as the frontend expects
         } catch (error) {
             res.status(500).json({ error: error.message });
         }
@@ -67,8 +75,9 @@ class PaymentController {
     static async getStudentPayments(req, res) {
         try {
             const studentId = req.user.user_id; // Get ID from the authenticated user
-            const payments = await Payment.findByUserId(studentId);
-            res.json(payments);
+            // Corrected function call from findByUserId to getByUser
+            const payments = await Payment.getByUser(studentId);
+            res.json({ payments }); // The response now correctly wraps the array in an object
         } catch (error) {
             res.status(500).json({ error: error.message });
         }

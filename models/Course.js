@@ -125,24 +125,25 @@ class Course {
           SELECT 
               c.*, 
               (SELECT COUNT(*) FROM Lessons WHERE course_id = c.course_id) as lessons_count,
-              COALESCE(
-                  (SELECT status FROM Enrollments WHERE user_id = ? AND course_id = c.course_id AND status = 'active'),
-                  (SELECT status FROM Payments WHERE user_id = ? AND course_id = c.course_id ORDER BY created_at DESC LIMIT 1),
-                  'available'
-              ) as enrollment_status
+              CASE
+                  WHEN EXISTS (SELECT 1 FROM Enrollments WHERE user_id = ? AND course_id = c.course_id AND status = 'active')
+                      THEN 'active'
+                  WHEN EXISTS (SELECT 1 FROM Payments WHERE user_id = ? AND course_id = c.course_id AND status = 'pending')
+                      THEN 'pending'
+                  ELSE 'available'
+              END as enrollment_status
           FROM Courses c
           WHERE c.category = ?
           ORDER BY 
               CASE enrollment_status
                   WHEN 'active' THEN 1
                   WHEN 'pending' THEN 2
-                  WHEN 'rejected' THEN 3
-                  ELSE 4
+                  ELSE 3
               END,
               c.created_at DESC;
       `;
   
-      const params = [user.userId, user.userId, user.college];
+      const params = [user.user_id, user.user_id, user.college];
   
       return new Promise((resolve, reject) => {
         db.all(sql, params, (err, rows) => {

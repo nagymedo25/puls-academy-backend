@@ -272,17 +272,30 @@ class Payment {
     }
   }
 
-    static async countByStatus(status) {
-        const sql = "SELECT COUNT(*) as count FROM Payments WHERE status = ?";
-        return new Promise((resolve, reject) => {
-            db.get(sql, [status], (err, row) => {
-                if (err) {
-                    return reject(new Error("فشل في حساب عدد المدفوعات."));
-                }
-                resolve(row || { count: 0 });
-            });
-        });
-    }
+  static async findPendingByUserAndCourse(userId, courseId) {
+    const sql = `
+        SELECT * FROM Payments 
+        WHERE user_id = ? AND course_id = ? AND status = 'pending'
+    `;
+    return new Promise((resolve, reject) => {
+      db.get(sql, [userId, courseId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+  }
+
+  static async countByStatus(status) {
+    const sql = "SELECT COUNT(*) as count FROM Payments WHERE status = ?";
+    return new Promise((resolve, reject) => {
+      db.get(sql, [status], (err, row) => {
+        if (err) {
+          return reject(new Error("فشل في حساب عدد المدفوعات."));
+        }
+        resolve(row || { count: 0 });
+      });
+    });
+  }
 
   static async delete(paymentId) {
     try {
