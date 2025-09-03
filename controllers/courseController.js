@@ -109,7 +109,7 @@ class CourseController {
   }
 
 
-  static async getCourseLessons(req, res) {
+ static async getCourseLessons(req, res) {
     try {
       const { courseId } = req.params;
       const user = req.user;
@@ -119,7 +119,7 @@ class CourseController {
       }
 
       const enrollment = await Enrollment.findByUserAndCourse(
-        user.user_id, // ✨ تأكد من استخدام user_id هنا
+        user.user_id, // <-- هذا هو الاستخدام الصحيح
         courseId
       );
       if (!enrollment || enrollment.status !== "active") {
@@ -159,35 +159,6 @@ class CourseController {
       res.json({ lesson });
     } catch (error) {
       res.status(403).json({ error: error.message });
-    }
-  }
-
-  static async getCourseLessons(req, res) {
-    try {
-      const { courseId } = req.params;
-      const user = req.user;
-
-      if (!user) {
-        return res.status(401).json({ error: "المستخدم غير مصادق عليه." });
-      }
-
-      // أولاً: التحقق من أن المستخدم مشترك بالفعل في الكورس وحالته "مفعّل"
-      const enrollment = await Enrollment.findByUserAndCourse(
-        user.userId,
-        courseId
-      );
-      if (!enrollment || enrollment.status !== "active") {
-        // إذا لم يكن مشتركاً، يتم منعه من الوصول
-        return res
-          .status(403)
-          .json({ error: "ليس لديك صلاحية الوصول لدروس هذا الكورس." });
-      }
-
-      // إذا كان مشتركاً، يتم جلب قائمة الدروس
-      const lessons = await Lesson.getByCourseId(courseId, user);
-      res.json({ lessons });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
     }
   }
 

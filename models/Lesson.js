@@ -79,9 +79,8 @@ class Lesson {
               ORDER BY l.order_index ASC, l.lesson_id ASC
           `;
 
-      // ✨ FIX: Changed `user.userId` to `user.user_id`
       const params = user
-        ? [user.user_id, user.user_id, courseId]
+        ? [user.user_id, user.user_id, courseId] // ✨ CORRECTED THIS LINE
         : [null, null, courseId];
 
       return new Promise((resolve, reject) => {
