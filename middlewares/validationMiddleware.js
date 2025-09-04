@@ -4,9 +4,9 @@ const { validatePasswordStrength } = require("../config/auth");
 
 const validateRegistration = (req, res, next) => {
   try {
-    const { name, email, password, college, gender } = req.body;
+    const { name, email, password, college, gender, phone } = req.body;
 
-    if (!name || !email || !password || !college || !gender) {
+    if (!name || !email || !password || !college || !gender || !phone) {
       return res.status(400).json({ error: "جميع الحقول مطلوبة" });
     }
 
@@ -19,6 +19,15 @@ const validateRegistration = (req, res, next) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({ error: "البريد الإلكتروني غير صالح" });
+    }
+    
+     // ✨ التحقق الصارم من رقم الهاتف
+    const phoneRegexEgypt = /^\+201[0125]\d{8}$/; // Egyptian numbers
+    const phoneRegexKSA = /^\+9665\d{8}$/;      // Saudi numbers
+    const phoneRegexUAE = /^\+9715\d{8}$/;      // Emirati numbers
+    
+    if (!phoneRegexEgypt.test(phone) && !phoneRegexKSA.test(phone) && !phoneRegexUAE.test(phone)) {
+      return res.status(400).json({ error: "صيغة رقم الهاتف غير صحيحة أو الدولة غير مدعومة." });
     }
 
     const passwordValidation = validatePasswordStrength(password);
@@ -152,7 +161,7 @@ const validatePaymentCreation = (req, res, next) => {
 
 const validateProfileUpdate = (req, res, next) => {
   try {
-    const { name, email, college, gender } = req.body;
+    const { name, email, college, gender, phone } = req.body;
 
     if (name && (typeof name !== "string" || name.trim().length < 3)) {
       return res
@@ -165,6 +174,15 @@ const validateProfileUpdate = (req, res, next) => {
       if (!emailRegex.test(email)) {
         return res.status(400).json({ error: "البريد الإلكتروني غير صالح" });
       }
+    }
+    
+     if (phone) {
+        const phoneRegexEgypt = /^\+201[0125]\d{8}$/;
+        const phoneRegexKSA = /^\+9665\d{8}$/;
+        const phoneRegexUAE = /^\+9715\d{8}$/;
+        if (!phoneRegexEgypt.test(phone) && !phoneRegexKSA.test(phone) && !phoneRegexUAE.test(phone)) {
+            return res.status(400).json({ error: "صيغة رقم الهاتف غير صحيحة أو الدولة غير مدعومة." });
+        }
     }
 
     if (college) {

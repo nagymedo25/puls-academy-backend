@@ -90,13 +90,13 @@ class AuthController {
   }
 
   static async getProfile(req, res) {
-    // The user object is attached to req.user by the authMiddleware
     res.json({ user: req.user });
   }
 
   static async updateProfile(req, res) {
     try {
-      const { name, email, college, gender } = req.body;
+      // ✨ تم استخلاص رقم الهاتف من جسم الطلب
+      const { name, email, college, gender, phone } = req.body;
       const userId = req.user.user_id;
 
       const updatedUser = await User.update(userId, {
@@ -104,6 +104,7 @@ class AuthController {
         email,
         college,
         gender,
+        phone, 
       });
 
       res.json({
@@ -121,7 +122,7 @@ class AuthController {
   static async changePassword(req, res) {
     try {
       const { currentPassword, newPassword } = req.body;
-      const userId = req.user.user_id; 
+      const userId = req.user.user_id;
 
       if (!currentPassword || !newPassword) {
         return res

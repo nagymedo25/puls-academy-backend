@@ -37,7 +37,8 @@ const generateToken = (user) => {
             email: user.email,
             role: user.role,
             college: user.college,
-            gender: user.gender
+            gender: user.gender,
+            phone: user.phone
         };
         
         const token = jwt.sign(payload, JWT_SECRET, {
@@ -124,6 +125,7 @@ const createSafeUserData = (user) => {
         role: user.role,
         college: user.college,
         gender: user.gender,
+        phone: user.phone,
         created_at: user.created_at
     };
 };

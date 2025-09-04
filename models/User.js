@@ -11,21 +11,21 @@ class User {
   // إنشاء مستخدم جديد
   static async create(userData) {
     try {
-      const { name, email, password, college, gender } = userData;
+      const { name, email, password, college, gender, phone } = userData;
 
       // تشفير كلمة المرور
       const password_hash = await hashPassword(password);
 
       // إدخال المستخدم في قاعدة البيانات
       const sql = `
-                INSERT INTO Users (name, email, password_hash, college, gender)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO Users (name, email, password_hash, college, gender, phone)
+                VALUES (?, ?, ?, ?, ?, ?)
             `;
 
       return new Promise((resolve, reject) => {
         db.run(
           sql,
-          [name, email, password_hash, college, gender],
+          [name, email, password_hash, college, gender, phone],
           function (err) {
             if (err) {
               if (err.code === "SQLITE_CONSTRAINT") {
@@ -114,11 +114,16 @@ class User {
 
   // تحديث بيانات المستخدم
  static async update(userId, userData) {
+
     try {
-      // ✨ بداية التعديلات
-      const { name, email, password, college, gender } = userData;
+      const { name, email, password, college, gender, phone } = userData; // إضافة phone
       const updates = [];
       const values = [];
+
+      if (phone !== undefined) {
+        updates.push("phone = ?");
+        values.push(phone);
+      }
 
       if (name !== undefined) {
         updates.push("name = ?");
@@ -135,6 +140,10 @@ class User {
       if (gender !== undefined) {
         updates.push("gender = ?");
         values.push(gender);
+      }
+      if (phone !== undefined) {
+        updates.push("phone = ?");
+        values.push(phone);
       }
 
       // تشفير كلمة المرور الجديدة فقط إذا تم إدخالها
@@ -238,7 +247,7 @@ class User {
   static async getAll(limit = 50, offset = 0) {
     // ✨ تم تعديل الاستعلام هنا لعرض الطلاب فقط
     const sql = `
-            SELECT user_id, name, email, role, college, gender, created_at
+            SELECT user_id, name, email, role, college, gender, phone, created_at
             FROM Users 
             WHERE role = 'student'
             ORDER BY created_at DESC 
@@ -274,7 +283,7 @@ class User {
   // البحث عن مستخدمين (للأدمن)
   static async search(query, limit = 20) {
     const sql = `
-            SELECT user_id, name, email, role, college, gender, created_at
+            SELECT user_id, name, email, role, college, gender, phone, created_at
             FROM Users 
             WHERE (name LIKE ? OR email LIKE ?) AND role = 'student' -- إضافة شرط role
             ORDER BY created_at DESC 
