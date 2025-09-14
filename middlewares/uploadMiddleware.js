@@ -2,43 +2,26 @@
 
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
 
-// Define a directory for temporary uploads
-const uploadDir = path.join(__dirname, '../temp_uploads');
-
-// Ensure the temporary directory exists
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir);
-}
-
-// --- Use diskStorage to save files to a temporary folder first ---
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, uploadDir); // Save files to the temp_uploads directory
-    },
-    filename: function (req, file, cb) {
-        // Use a unique filename to avoid conflicts
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-    }
-});
+// ✨  تغيير رئيسي: استخدام التخزين في الذاكرة بدلاً من القرص الصلب
+// This holds the file as a buffer in memory, ready for uploading to MEGA.
+const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif|mp4|mov|avi|mkv/;
-    const extension = path.extname(file.originalname).toLowerCase().slice(1);
+    const allowedTypes = /jpeg|jpg|png|gif/;
+    const mimetype = allowedTypes.test(file.mimetype);
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
 
-    if (allowedTypes.test(extension)) {
+    if (mimetype && extname) {
         return cb(null, true);
-    } else {
-        cb(new Error('نوع الملف غير مدعوم'));
     }
+    cb(new Error('نوع الملف غير مدعوم. يرجى رفع صورة فقط.'));
 };
 
 const uploadMiddleware = multer({
-    storage: storage, // Use the new disk storage engine
+    storage: storage, // Use memory storage
     limits: {
-        fileSize: 100 * 1024 * 1024, // 100MB
+        fileSize: 10 * 1024 * 1024, // 10MB limit for screenshots
     },
     fileFilter: fileFilter,
 });

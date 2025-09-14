@@ -5,27 +5,19 @@ const { db } = require("../config/db");
 class Payment {
   static async create(paymentData) {
     try {
-      const { user_id, course_id, amount, method, screenshot_path } =
+      // Added screenshot_public_id
+      const { user_id, course_id, amount, method, screenshot_url, screenshot_public_id } =
         paymentData;
 
       const sql = `
-                INSERT INTO Payments (user_id, course_id, amount, method, screenshot_path, status)
-                VALUES (?, ?, ?, ?, ?, 'pending')
-            `;
+        INSERT INTO Payments (user_id, course_id, amount, method, screenshot_url, screenshot_public_id, status)
+        VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+        RETURNING payment_id
+      `;
 
-      return new Promise((resolve, reject) => {
-        db.run(
-          sql,
-          [user_id, course_id, amount, method, screenshot_path],
-          function (err) {
-            if (err) {
-              reject(err);
-            } else {
-              Payment.findById(this.lastID).then(resolve).catch(reject);
-            }
-          }
-        );
-      });
+      const result = await db.query(sql, [user_id, course_id, amount, method, screenshot_url, screenshot_public_id]);
+      return Payment.findById(result.rows[0].payment_id);
+
     } catch (error) {
       throw error;
     }
@@ -33,79 +25,61 @@ class Payment {
 
   static async findById(paymentId) {
     const sql = `
-            SELECT p.*, u.name as user_name, u.email as user_email, c.title as course_title
-            FROM Payments p
-            JOIN Users u ON p.user_id = u.user_id
-            JOIN Courses c ON p.course_id = c.course_id
-            WHERE p.payment_id = ?
-        `;
-
-    return new Promise((resolve, reject) => {
-      db.get(sql, [paymentId], (err, row) => {
-        if (err) {
-          reject(err);
-        } else if (!row) {
-          reject(new Error("الدفعة غير موجودة"));
-        } else {
-          resolve(row);
-        }
-      });
-    });
+      SELECT p.*, u.name as user_name, u.email as user_email, c.title as course_title
+      FROM Payments p
+      JOIN Users u ON p.user_id = u.user_id
+      JOIN Courses c ON p.course_id = c.course_id
+      WHERE p.payment_id = $1
+    `;
+    const result = await db.query(sql, [paymentId]);
+    if (result.rows.length === 0) {
+      throw new Error("الدفعة غير موجودة");
+    }
+    return result.rows[0];
   }
 
   static async getAll(filters = {}) {
     try {
       let sql = `
-                SELECT p.*, u.name as user_name, u.email as user_email, c.title as course_title
-                FROM Payments p
-                JOIN Users u ON p.user_id = u.user_id
-                JOIN Courses c ON p.course_id = c.course_id
-                WHERE 1=1
-            `;
-
+        SELECT p.*, u.name as user_name, u.email as user_email, c.title as course_title
+        FROM Payments p
+        JOIN Users u ON p.user_id = u.user_id
+        JOIN Courses c ON p.course_id = c.course_id
+        WHERE 1=1
+      `;
       const params = [];
+      let paramIndex = 1;
 
       if (filters.status) {
-        sql += " AND p.status = ?";
+        sql += ` AND p.status = $${paramIndex++}`;
         params.push(filters.status);
       }
-
       if (filters.user_id) {
-        sql += " AND p.user_id = ?";
+        sql += ` AND p.user_id = $${paramIndex++}`;
         params.push(filters.user_id);
       }
-
       if (filters.course_id) {
-        sql += " AND p.course_id = ?";
+        sql += ` AND p.course_id = $${paramIndex++}`;
         params.push(filters.course_id);
       }
-
       if (filters.method) {
-        sql += " AND p.method = ?";
+        sql += ` AND p.method = $${paramIndex++}`;
         params.push(filters.method);
       }
 
       sql += " ORDER BY p.created_at DESC";
 
       if (filters.limit) {
-        sql += " LIMIT ?";
+        sql += ` LIMIT $${paramIndex++}`;
         params.push(filters.limit);
       }
-
       if (filters.offset) {
-        sql += " OFFSET ?";
+        sql += ` OFFSET $${paramIndex++}`;
         params.push(filters.offset);
       }
 
-      return new Promise((resolve, reject) => {
-        db.all(sql, params, (err, rows) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(rows);
-          }
-        });
-      });
+      const result = await db.query(sql, params);
+      return result.rows;
     } catch (error) {
       throw error;
     }
@@ -113,212 +87,115 @@ class Payment {
 
   static async getPending() {
     const sql = `
-            SELECT p.*, u.name as user_name, u.email as user_email, c.title as course_title
-            FROM Payments p
-            JOIN Users u ON p.user_id = u.user_id
-            JOIN Courses c ON p.course_id = c.course_id
-            WHERE p.status = 'pending'
-            ORDER BY p.created_at ASC
-        `;
-
-    return new Promise((resolve, reject) => {
-      db.all(sql, [], (err, rows) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(rows);
-        }
-      });
-    });
+      SELECT p.*, u.name as user_name, u.email as user_email, c.title as course_title
+      FROM Payments p
+      JOIN Users u ON p.user_id = u.user_id
+      JOIN Courses c ON p.course_id = c.course_id
+      WHERE p.status = 'pending'
+      ORDER BY p.created_at ASC
+    `;
+    const result = await db.query(sql);
+    return result.rows;
   }
-
+  
   static async deleteAll() {
     const sql = "DELETE FROM Payments WHERE status = 'approved'";
-    return new Promise((resolve, reject) => {
-      db.run(sql, [], function (err) {
-        if (err) {
-          return reject(err);
-        }
-        resolve({
-          message: "تم حذف المدفوعات المعتمدة بنجاح",
-          deletedCount: this.changes,
-        });
-      });
-    });
+    const result = await db.query(sql);
+    return {
+      message: "تم حذف المدفوعات المعتمدة بنجاح",
+      deletedCount: result.rowCount,
+    };
   }
 
   static async updateStatus(paymentId, status) {
-    try {
-      const validStatuses = ["pending", "approved", "rejected"];
-      if (!validStatuses.includes(status)) {
-        throw new Error("حالة الدفع غير صالحة");
-      }
-
-      const sql = "UPDATE Payments SET status = ? WHERE payment_id = ?";
-
-      return new Promise((resolve, reject) => {
-        db.run(sql, [status, paymentId], function (err) {
-          if (err) {
-            reject(err);
-          } else if (this.changes === 0) {
-            reject(new Error("الدفعة غير موجودة"));
-          } else {
-            Payment.findById(paymentId).then(resolve).catch(reject);
-          }
-        });
-      });
-    } catch (error) {
-      throw error;
+    const validStatuses = ["pending", "approved", "rejected"];
+    if (!validStatuses.includes(status)) {
+      throw new Error("حالة الدفع غير صالحة");
     }
+    const sql = "UPDATE Payments SET status = $1 WHERE payment_id = $2";
+    const result = await db.query(sql, [status, paymentId]);
+    if (result.rowCount === 0) {
+      throw new Error("الدفعة غير موجودة");
+    }
+    return Payment.findById(paymentId);
   }
 
   static async approve(paymentId) {
-    try {
-      const payment = await Payment.findById(paymentId);
-
-      if (payment.status === "approved") {
-        throw new Error("الدفعة معتمدة بالفعل");
-      }
-
-      await Payment.updateStatus(paymentId, "approved");
-
-      return payment;
-    } catch (error) {
-      throw error;
+    const payment = await Payment.findById(paymentId);
+    if (payment.status === "approved") {
+      throw new Error("الدفعة معتمدة بالفعل");
     }
+    return Payment.updateStatus(paymentId, "approved");
   }
 
   static async reject(paymentId) {
-    try {
-      const payment = await Payment.findById(paymentId);
-
-      if (payment.status === "rejected") {
-        throw new Error("الدفعة مرفوضة بالفعل");
-      }
-
-      await Payment.updateStatus(paymentId, "rejected");
-
-      return payment;
-    } catch (error) {
-      throw error;
+    const payment = await Payment.findById(paymentId);
+    if (payment.status === "rejected") {
+      throw new Error("الدفعة مرفوضة بالفعل");
     }
+    return Payment.updateStatus(paymentId, "rejected");
   }
 
   static async getByUser(userId) {
     const sql = `
-            SELECT p.*, c.title as course_title
-            FROM Payments p
-            JOIN Courses c ON p.course_id = c.course_id
-            WHERE p.user_id = ?
-            ORDER BY p.created_at DESC
-        `;
-
-    return new Promise((resolve, reject) => {
-      db.all(sql, [userId], (err, rows) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(rows);
-        }
-      });
-    });
+      SELECT p.*, c.title as course_title
+      FROM Payments p
+      JOIN Courses c ON p.course_id = c.course_id
+      WHERE p.user_id = $1
+      ORDER BY p.created_at DESC
+    `;
+    const result = await db.query(sql, [userId]);
+    return result.rows;
   }
 
   static async getByCourse(courseId) {
     const sql = `
-            SELECT p.*, u.name as user_name, u.email as user_email
-            FROM Payments p
-            JOIN Users u ON p.user_id = u.user_id
-            WHERE p.course_id = ?
-            ORDER BY p.created_at DESC
-        `;
-
-    return new Promise((resolve, reject) => {
-      db.all(sql, [courseId], (err, rows) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(rows);
-        }
-      });
-    });
+      SELECT p.*, u.name as user_name, u.email as user_email
+      FROM Payments p
+      JOIN Users u ON p.user_id = u.user_id
+      WHERE p.course_id = $1
+      ORDER BY p.created_at DESC
+    `;
+    const result = await db.query(sql, [courseId]);
+    return result.rows;
   }
 
   static async getStats() {
-    try {
-      const sql = `
-                SELECT 
-                    COUNT(*) as total_payments,
-                    SUM(CASE WHEN status = 'approved' THEN amount ELSE 0 END) as total_revenue,
-                    SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END) as pending_amount,
-                    COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_count,
-                    COUNT(CASE WHEN status = 'approved' THEN 1 END) as approved_count,
-                    COUNT(CASE WHEN status = 'rejected' THEN 1 END) as rejected_count,
-                    AVG(CASE WHEN status = 'approved' THEN amount END) as average_payment
-                FROM Payments
-            `;
-
-      return new Promise((resolve, reject) => {
-        db.get(sql, [], (err, row) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(row);
-          }
-        });
-      });
-    } catch (error) {
-      throw error;
-    }
+    const sql = `
+      SELECT 
+          COUNT(*) as total_payments,
+          SUM(CASE WHEN status = 'approved' THEN amount ELSE 0 END) as total_revenue,
+          SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END) as pending_amount,
+          COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_count,
+          COUNT(CASE WHEN status = 'approved' THEN 1 END) as approved_count,
+          COUNT(CASE WHEN status = 'rejected' THEN 1 END) as rejected_count,
+          AVG(CASE WHEN status = 'approved' THEN amount END) as average_payment
+      FROM Payments
+    `;
+    const result = await db.query(sql);
+    return result.rows[0];
   }
 
   static async deleteByUser(userId) {
-    const sql = "DELETE FROM Payments WHERE user_id = ?";
-
-    return new Promise((resolve, reject) => {
-      db.run(sql, [userId], function (err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve({
-            message: "تم حذف جميع مدفوعات المستخدم بنجاح",
-            deletedCount: this.changes,
-          });
-        }
-      });
-    });
+    const sql = "DELETE FROM Payments WHERE user_id = $1";
+    const result = await db.query(sql, [userId]);
+    return {
+      message: "تم حذف جميع مدفوعات المستخدم بنجاح",
+      deletedCount: result.rowCount,
+    };
   }
 
   static async countByStatus(status) {
-    const sql = "SELECT COUNT(*) as count FROM Payments WHERE status = ?";
-    return new Promise((resolve, reject) => {
-      db.get(sql, [status], (err, row) => {
-        if (err) {
-          return reject(new Error("فشل في حساب عدد المدفوعات."));
-        }
-        resolve(row || { count: 0 });
-      });
-    });
+    const sql = "SELECT COUNT(*) as count FROM Payments WHERE status = $1";
+    const result = await db.query(sql, [status]);
+    return result.rows[0] || { count: 0 };
   }
 
   static async delete(paymentId) {
-    try {
-      await Payment.findById(paymentId);
-
-      const sql = "DELETE FROM Payments WHERE payment_id = ?";
-
-      return new Promise((resolve, reject) => {
-        db.run(sql, [paymentId], function (err) {
-          if (err) {
-            reject(err);
-          } else {
-            resolve({ message: "تم حذف الدفعة بنجاح" });
-          }
-        });
-      });
-    } catch (error) {
-      throw error;
-    }
+    await Payment.findById(paymentId);
+    const sql = "DELETE FROM Payments WHERE payment_id = $1";
+    await db.query(sql, [paymentId]);
+    return { message: "تم حذف الدفعة بنجاح" };
   }
 }
 

@@ -1,142 +1,137 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const { Pool } = require('pg');
+const dotenv = require('dotenv');
 
-// مسار قاعدة البيانات
-const dbPath = path.join(__dirname, '../database.sqlite');
+dotenv.config();
 
-// إنشاء اتصال بقاعدة البيانات
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error('خطأ في فتح قاعدة البيانات:', err.message);
-    } else {
-        console.log('تم الاتصال بقاعدة بيانات SQLite');
-    }
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  // Add SSL configuration for production environments like Neon, Heroku, etc.
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
-// دالة لإنشاء الجداول
-const createTables = () => {
-    return new Promise((resolve, reject) => {
-        // جدول المستخدمين
-        db.run(`CREATE TABLE IF NOT EXISTS Users (
-            user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            email TEXT UNIQUE,
-            phone TEXT UNIQUE,
-            password_hash TEXT NOT NULL,
-            role TEXT DEFAULT 'student' CHECK(role IN ('student', 'admin')),
-            college TEXT NOT NULL CHECK(college IN ('pharmacy', 'dentistry')),
-            gender TEXT NOT NULL CHECK(gender IN ('male', 'female')),
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )`);
+const createTables = async () => {
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS Users (
+          user_id SERIAL PRIMARY KEY,
+          name TEXT NOT NULL,
+          email TEXT UNIQUE,
+          phone TEXT UNIQUE,
+          password_hash TEXT NOT NULL,
+          role TEXT DEFAULT 'student' CHECK(role IN ('student', 'admin')),
+          college TEXT NOT NULL CHECK(college IN ('pharmacy', 'dentistry')),
+          gender TEXT NOT NULL CHECK(gender IN ('male', 'female')),
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
-        // جدول الكورسات
-        db.run(`CREATE TABLE IF NOT EXISTS Courses (
-            course_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            description TEXT,
-            category TEXT NOT NULL CHECK(category IN ('pharmacy', 'dentistry')),
-            college_type TEXT NOT NULL CHECK(college_type IN ('male', 'female')),
-            price REAL NOT NULL,
-            thumbnail_url TEXT, -- <<<--- تمت إضافة هذا الحقل
-            preview_url TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS Courses (
+          course_id SERIAL PRIMARY KEY,
+          title TEXT NOT NULL,
+          description TEXT,
+          category TEXT NOT NULL CHECK(category IN ('pharmacy', 'dentistry')),
+          college_type TEXT NOT NULL CHECK(college_type IN ('male', 'female')),
+          price REAL NOT NULL,
+          thumbnail_url TEXT,
+          preview_url TEXT,
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
-        db.run(`CREATE TABLE IF NOT EXISTS Lessons (
-            lesson_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            course_id INTEGER NOT NULL,
-            title TEXT NOT NULL,
-            description TEXT, -- ✨ أضف هذا السطر
-            video_url TEXT NOT NULL,
-            is_preview BOOLEAN DEFAULT FALSE,
-            order_index INTEGER DEFAULT 0,
-            FOREIGN KEY (course_id) REFERENCES Courses(course_id) ON DELETE CASCADE
-        )`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS Lessons (
+          lesson_id SERIAL PRIMARY KEY,
+          course_id INTEGER NOT NULL REFERENCES Courses(course_id) ON DELETE CASCADE,
+          title TEXT NOT NULL,
+          description TEXT,
+          video_url TEXT NOT NULL,
+          is_preview BOOLEAN DEFAULT FALSE,
+          order_index INTEGER DEFAULT 0
+      )
+    `);
 
-        // جدول المدفوعات
-        db.run(`CREATE TABLE IF NOT EXISTS Payments (
-            payment_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            course_id INTEGER NOT NULL,
-            amount REAL NOT NULL,
-            method TEXT NOT NULL CHECK(method IN ('vodafone_cash', 'instapay')),
-            screenshot_path TEXT,
-            status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES Users(user_id),
-            FOREIGN KEY (course_id) REFERENCES Courses(course_id)
-        )`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS Payments (
+          payment_id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES Users(user_id) ON DELETE CASCADE,
+          course_id INTEGER NOT NULL REFERENCES Courses(course_id) ON DELETE CASCADE,
+          amount REAL NOT NULL,
+          method TEXT NOT NULL CHECK(method IN ('vodafone_cash', 'instapay')),
+          screenshot_url TEXT,
+          screenshot_public_id TEXT,
+          status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
-        // جدول التسجيلات
-        db.run(`CREATE TABLE IF NOT EXISTS Enrollments (
-            enrollment_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            course_id INTEGER NOT NULL,
-            payment_id INTEGER,
-            status TEXT DEFAULT 'active' CHECK(status IN ('active', 'inactive')),
-            enrolled_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES Users(user_id),
-            FOREIGN KEY (course_id) REFERENCES Courses(course_id),
-            FOREIGN KEY (payment_id) REFERENCES Payments(payment_id),
-            UNIQUE(user_id, course_id)
-        )`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS Enrollments (
+          enrollment_id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES Users(user_id) ON DELETE CASCADE,
+          course_id INTEGER NOT NULL REFERENCES Courses(course_id) ON DELETE CASCADE,
+          payment_id INTEGER REFERENCES Payments(payment_id) ON DELETE SET NULL,
+          status TEXT DEFAULT 'active' CHECK(status IN ('active', 'inactive')),
+          enrolled_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(user_id, course_id)
+      )
+    `);
 
-        // جدول الإشعارات
-        db.run(`CREATE TABLE IF NOT EXISTS Notifications (
-            notification_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            message TEXT NOT NULL,
-            is_read BOOLEAN DEFAULT FALSE,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
-        )`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS Notifications (
+          notification_id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES Users(user_id) ON DELETE CASCADE,
+          message TEXT NOT NULL,
+          is_read BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
-        // ✨ جدول جديد للرسائل
-        db.run(`CREATE TABLE IF NOT EXISTS Messages (
-            message_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sender_id INTEGER NOT NULL,
-            receiver_id INTEGER NOT NULL,
-            message_content TEXT NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            is_read BOOLEAN DEFAULT FALSE,
-            FOREIGN KEY (sender_id) REFERENCES Users(user_id) ON DELETE CASCADE,
-            FOREIGN KEY (receiver_id) REFERENCES Users(user_id) ON DELETE CASCADE
-        )`, (err) => {
-            if (err) {
-                reject(err);
-            } else {
-                resolve();
-            }
-        });
-    });
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS Messages (
+          message_id SERIAL PRIMARY KEY,
+          sender_id INTEGER NOT NULL REFERENCES Users(user_id) ON DELETE CASCADE,
+          receiver_id INTEGER NOT NULL REFERENCES Users(user_id) ON DELETE CASCADE,
+          message_content TEXT NOT NULL,
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          is_read BOOLEAN DEFAULT FALSE
+      )
+    `);
+  } finally {
+    client.release();
+  }
 };
 
-// دالة تهيئة قاعدة البيانات
 const initializeDatabase = async () => {
+  try {
+    await createTables();
+    console.log('تم إنشاء جميع الجداول بنجاح');
+
+    const bcrypt = require('bcrypt');
+    const adminEmail = 'admin@pulsacademy.com';
+    const adminPassword = await bcrypt.hash(process.env.ADMIN_DEFAULT_PASSWORD || 'admin123', 10);
+
+    const client = await pool.connect();
     try {
-        await createTables();
-        console.log('تم إنشاء جميع الجداول بنجاح');
-        
-        // إنشاء أدمن افتراضي إذا لم يكن موجوداً
-        const bcrypt = require('bcrypt');
-        const adminEmail = 'admin@pulsacademy.com';
-        // FIX: Added the second argument (salt rounds) to bcrypt.hash
-        const adminPassword = await bcrypt.hash(process.env.ADMIN_DEFAULT_PASSWORD, 10);
-        
-        db.run(`INSERT OR IGNORE INTO Users (name, email, password_hash, role, college, gender) 
-                VALUES (?, ?, ?, ?, ?, ?)`, 
-                ['Admin', adminEmail, adminPassword, 'admin', 'pharmacy', 'male']);
-        
-        console.log('تم تهيئة قاعدة البيانات بنجاح');
-    } catch (error) {
-        console.error('خطأ في تهيئة قاعدة البيانات:', error);
-        throw error;
+      await client.query(
+        `INSERT INTO Users (name, email, password_hash, role, college, gender)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (email) DO NOTHING`,
+        ['Admin', adminEmail, adminPassword, 'admin', 'pharmacy', 'male']
+      );
+    } finally {
+      client.release();
     }
+
+    console.log('تم تهيئة قاعدة البيانات بنجاح');
+  } catch (error) {
+    console.error('خطأ في تهيئة قاعدة البيانات:', error);
+    throw error;
+  }
 };
 
-
-// تصدير قاعدة البيانات ودالة التهيئة
 module.exports = {
-    db,
-    initializeDatabase,
+  db: pool,
+  initializeDatabase,
 };

@@ -4,397 +4,214 @@ const { db } = require("../config/db");
 const { canAccessCourse } = require("../config/auth");
 
 class Course {
-  // إنشاء كورس جديد
   static async create(courseData) {
-    try {
-      const {
-        title,
-        description,
-        category,
-        college_type,
-        price,
-        preview_url,
-        thumbnail_url,
-      } = courseData;
-
-      const sql = `
-                INSERT INTO Courses (title, description, category, college_type, price, preview_url, thumbnail_url)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            `;
-
-      return new Promise((resolve, reject) => {
-        db.run(
-          sql,
-          [
-            title,
-            description,
-            category,
-            college_type,
-            price,
-            preview_url,
-            thumbnail_url,
-          ],
-          function (err) {
-            if (err) {
-              reject(err);
-            } else {
-              Course.findById(this.lastID).then(resolve).catch(reject);
-            }
-          }
-        );
-      });
-    } catch (error) {
-      throw error;
-    }
+    const {
+      title,
+      description,
+      category,
+      college_type,
+      price,
+      preview_url,
+      thumbnail_url,
+    } = courseData;
+    const sql = `
+      INSERT INTO Courses (title, description, category, college_type, price, preview_url, thumbnail_url)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
+    `;
+    const result = await db.query(sql, [
+      title,
+      description,
+      category,
+      college_type,
+      price,
+      preview_url,
+      thumbnail_url,
+    ]);
+    return result.rows[0];
   }
 
-  // البحث عن كورس بالمعرف
   static async findById(courseId) {
-    const sql = "SELECT * FROM Courses WHERE course_id = ?";
-
-    return new Promise((resolve, reject) => {
-      db.get(sql, [courseId], (err, row) => {
-        if (err) {
-          reject(err);
-        } else if (!row) {
-          reject(new Error("الكورس غير موجود"));
-        } else {
-          resolve(row);
-        }
-      });
-    });
+    const sql = "SELECT * FROM Courses WHERE course_id = $1";
+    const result = await db.query(sql, [courseId]);
+    if (result.rows.length === 0) {
+      throw new Error("الكورس غير موجود");
+    }
+    return result.rows[0];
   }
 
-  // الحصول على جميع الكورسات
   static async getAll(filters = {}) {
-    try {
-      let sql = `
-                SELECT c.*, 
-                       (SELECT COUNT(*) FROM Lessons WHERE course_id = c.course_id) as lessons_count
-                FROM Courses c
-                WHERE 1=1
-            `;
+    let sql = `
+      SELECT c.*,
+             (SELECT COUNT(*) FROM Lessons WHERE course_id = c.course_id) as lessons_count
+      FROM Courses c
+      WHERE 1=1
+    `;
+    const params = [];
+    let paramIndex = 1;
 
-      const params = [];
-
-      if (filters.category) {
-        sql += " AND c.category = ?";
-        params.push(filters.category);
-      }
-
-      if (filters.min_price !== undefined) {
-        sql += " AND c.price >= ?";
-        params.push(filters.min_price);
-      }
-
-      if (filters.max_price !== undefined) {
-        sql += " AND c.price <= ?";
-        params.push(filters.max_price);
-      }
-
-      sql += " ORDER BY c.created_at DESC";
-
-      if (filters.limit) {
-        sql += " LIMIT ?";
-        params.push(filters.limit);
-      }
-
-      if (filters.offset) {
-        sql += " OFFSET ?";
-        params.push(filters.offset);
-      }
-
-      return new Promise((resolve, reject) => {
-        db.all(sql, params, (err, rows) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(rows);
-          }
-        });
-      });
-    } catch (error) {
-      throw error;
+    if (filters.category) {
+      sql += ` AND c.category = $${paramIndex++}`;
+      params.push(filters.category);
     }
+    if (filters.min_price !== undefined) {
+      sql += ` AND c.price >= $${paramIndex++}`;
+      params.push(filters.min_price);
+    }
+    if (filters.max_price !== undefined) {
+      sql += ` AND c.price <= $${paramIndex++}`;
+      params.push(filters.max_price);
+    }
+
+    sql += " ORDER BY c.created_at DESC";
+
+    if (filters.limit) {
+      sql += ` LIMIT $${paramIndex++}`;
+      params.push(filters.limit);
+    }
+    if (filters.offset) {
+      sql += ` OFFSET $${paramIndex++}`;
+      params.push(filters.offset);
+    }
+
+    const result = await db.query(sql, params);
+    return result.rows;
   }
 
-  // ✨ --- START: التعديل الرئيسي هنا --- ✨
+  // ✨ --- START: The fix is in this function --- ✨
   static async getAvailableForUser(user) {
-    try {
-      const sql = `
-          SELECT 
-              c.*, 
-              (SELECT COUNT(*) FROM Lessons WHERE course_id = c.course_id) as lessons_count,
-              COALESCE(
-                  (SELECT status FROM Enrollments WHERE user_id = ? AND course_id = c.course_id AND status = 'active'),
-                  (SELECT status FROM Payments WHERE user_id = ? AND course_id = c.course_id ORDER BY created_at DESC LIMIT 1),
-                  'available'
-              ) as enrollment_status
-          FROM Courses c
-          WHERE c.category = ?
-          ORDER BY 
-              CASE enrollment_status
-                  WHEN 'active' THEN 1
-                  WHEN 'pending' THEN 2
-                  WHEN 'rejected' THEN 3
-                  ELSE 4
-              END,
-              c.created_at DESC;
-      `;
-  
-      const params = [user.user_id, user.user_id, user.college];
-  
-      return new Promise((resolve, reject) => {
-        db.all(sql, params, (err, rows) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(rows);
-          }
-        });
-      });
-    } catch (error) {
-      throw error;
-    }
+    // This query is wrapped in a subquery to allow ordering by the aliased `enrollment_status` column,
+    // which is required for PostgreSQL compatibility.
+    const sql = `
+        SELECT * FROM (
+            SELECT
+                c.*,
+                (SELECT COUNT(*) FROM Lessons WHERE course_id = c.course_id) as lessons_count,
+                COALESCE(
+                    (SELECT status FROM Enrollments WHERE user_id = $1 AND course_id = c.course_id AND status = 'active'),
+                    (SELECT status FROM Payments WHERE user_id = $2 AND course_id = c.course_id ORDER BY created_at DESC LIMIT 1),
+                    'available'
+                ) as enrollment_status
+            FROM Courses c
+            WHERE c.category = $3
+        ) AS courses_with_status
+        ORDER BY
+            CASE courses_with_status.enrollment_status
+                WHEN 'active' THEN 1
+                WHEN 'pending' THEN 2
+                WHEN 'rejected' THEN 3
+                ELSE 4
+            END,
+            courses_with_status.created_at DESC;
+    `;
+    const params = [user.user_id, user.user_id, user.college];
+    const result = await db.query(sql, params);
+    return result.rows;
   }
-  // ✨ --- END: التعديل الرئيسي هنا --- ✨
+  // ✨ --- END: The fix is in this function --- ✨
 
-  // تحديث كورس
+
   static async update(courseId, courseData) {
-    try {
-      const {
-        title,
-        description,
-        category,
-        college_type,
-        price,
-        preview_url,
-        thumbnail_url,
-      } = courseData;
-      const updates = [];
-      const values = [];
+    const updates = [];
+    const values = [];
+    let paramIndex = 1;
 
-      if (title !== undefined) {
-        updates.push("title = ?");
-        values.push(title);
-      }
-      if (description !== undefined) {
-        updates.push("description = ?");
-        values.push(description);
-      }
-      if (category !== undefined) {
-        updates.push("category = ?");
-        values.push(category);
-      }
-      if (college_type !== undefined) {
-        updates.push("college_type = ?");
-        values.push(college_type);
-      }
-      if (price !== undefined) {
-        updates.push("price = ?");
-        values.push(price);
-      }
-      if (preview_url !== undefined) {
-        updates.push("preview_url = ?");
-        values.push(preview_url);
-      }
-      if (thumbnail_url !== undefined) {
-        updates.push("thumbnail_url = ?");
-        values.push(thumbnail_url);
-      }
-
-      if (updates.length === 0) {
-        throw new Error("لا توجد بيانات لتحديثها");
-      }
-
-      values.push(courseId);
-      const sql = `UPDATE Courses SET ${updates.join(
-        ", "
-      )} WHERE course_id = ?`;
-
-      return new Promise((resolve, reject) => {
-        db.run(sql, values, function (err) {
-          if (err) {
-            reject(err);
-          } else if (this.changes === 0) {
-            reject(new Error("الكورس غير موجود"));
-          } else {
-            Course.findById(courseId).then(resolve).catch(reject);
-          }
-        });
-      });
-    } catch (error) {
-      throw error;
+    for (const key of ['title', 'description', 'category', 'college_type', 'price', 'preview_url', 'thumbnail_url']) {
+        if (courseData[key] !== undefined) {
+            updates.push(`${key} = $${paramIndex++}`);
+            values.push(courseData[key]);
+        }
     }
+
+    if (updates.length === 0) {
+      throw new Error("لا توجد بيانات لتحديثها");
+    }
+
+    values.push(courseId);
+    const sql = `UPDATE Courses SET ${updates.join(", ")} WHERE course_id = $${paramIndex} RETURNING *`;
+    const result = await db.query(sql, values);
+
+    if (result.rowCount === 0) {
+      throw new Error("الكورس غير موجود");
+    }
+    return result.rows[0];
   }
 
-  // حذف كورس
   static async delete(courseId) {
-    try {
-      await Course.findById(courseId);
-
-      const sql = "DELETE FROM Courses WHERE course_id = ?";
-
-      return new Promise((resolve, reject) => {
-        db.run(sql, [courseId], function (err) {
-          if (err) {
-            reject(err);
-          } else {
-            resolve({ message: "تم حذف الكورس بنجاح" });
-          }
-        });
-      });
-    } catch (error) {
-      throw error;
+    const result = await db.query("DELETE FROM Courses WHERE course_id = $1", [courseId]);
+    if (result.rowCount === 0) {
+        throw new Error("الكورس غير موجود");
     }
+    return { message: "تم حذف الكورس بنجاح" };
   }
 
-  // البحث عن كورسات
   static async search(query, filters = {}) {
-    try {
-      let sql = `
-                SELECT c.*, 
-                       (SELECT COUNT(*) FROM Lessons WHERE course_id = c.course_id) as lessons_count
-                FROM Courses c
-                WHERE (c.title LIKE ? OR c.description LIKE ?)
-            `;
+    let sql = `
+      SELECT c.*,
+             (SELECT COUNT(*) FROM Lessons WHERE course_id = c.course_id) as lessons_count
+      FROM Courses c
+      WHERE (c.title ILIKE $1 OR c.description ILIKE $1)
+    `;
+    const params = [`%${query}%`];
+    let paramIndex = 2;
 
-      const params = [`%${query}%`, `%${query}%`];
-
-      if (filters.category) {
-        sql += " AND c.category = ?";
-        params.push(filters.category);
-      }
-
-      if (filters.college_type) {
-        sql += " AND c.college_type = ?";
-        params.push(filters.college_type);
-      }
-
-      sql += " ORDER BY c.created_at DESC";
-
-      if (filters.limit) {
-        sql += " LIMIT ?";
-        params.push(filters.limit);
-      }
-
-      return new Promise((resolve, reject) => {
-        db.all(sql, params, (err, rows) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(rows);
-          }
-        });
-      });
-    } catch (error) {
-      throw error;
+    if (filters.category) {
+      sql += ` AND c.category = $${paramIndex++}`;
+      params.push(filters.category);
     }
+    if (filters.college_type) {
+      sql += ` AND c.college_type = $${paramIndex++}`;
+      params.push(filters.college_type);
+    }
+
+    sql += " ORDER BY c.created_at DESC";
+
+    if (filters.limit) {
+      sql += ` LIMIT $${paramIndex++}`;
+      params.push(filters.limit);
+    }
+
+    const result = await db.query(sql, params);
+    return result.rows;
   }
 
-  // الحصول على إحصائيات الكورسات
   static async getStats() {
-    try {
-      const sql = `
-                SELECT 
-                    COUNT(*) as total_courses,
-                    SUM(price) as total_value,
-                    AVG(price) as average_price,
-                    COUNT(CASE WHEN category = 'pharmacy' THEN 1 END) as pharmacy_courses,
-                    COUNT(CASE WHEN category = 'dentistry' THEN 1 END) as dentistry_courses,
-                    COUNT(CASE WHEN college_type = 'male' THEN 1 END) as male_courses,
-                    COUNT(CASE WHEN college_type = 'female' THEN 1 END) as female_courses
-                FROM Courses
-            `;
-
-      return new Promise((resolve, reject) => {
-        db.get(sql, [], (err, row) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(row);
-          }
-        });
-      });
-    } catch (error) {
-      throw error;
-    }
+    const sql = `
+      SELECT
+          COUNT(*) as total_courses,
+          SUM(price) as total_value,
+          AVG(price) as average_price,
+          COUNT(CASE WHEN category = 'pharmacy' THEN 1 END) as pharmacy_courses,
+          COUNT(CASE WHEN category = 'dentistry' THEN 1 END) as dentistry_courses,
+          COUNT(CASE WHEN college_type = 'male' THEN 1 END) as male_courses,
+          COUNT(CASE WHEN college_type = 'female' THEN 1 END) as female_courses
+      FROM Courses
+    `;
+    const result = await db.query(sql);
+    return result.rows[0];
   }
 
-    static async getCourseLessons(courseId, userId) {
-    try {
-      // التحقق مما إذا كان المستخدم مسجلاً في الكورس ومفعلاً
-      const enrollmentCheckSql = `
-        SELECT status FROM Enrollments WHERE user_id = ? AND course_id = ? AND status = 'active'
-      `;
-      const enrollment = await new Promise((resolve, reject) => {
-        db.get(enrollmentCheckSql, [userId, courseId], (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
-
-      if (!enrollment || enrollment.status !== 'active') {
-        throw new Error('ليس لديك صلاحية الوصول لهذا الكورس.');
-      }
-
-      const sql = `
-        SELECT lesson_id, course_id, title, description, video_url, duration, lesson_order
-        FROM Lessons
-        WHERE course_id = ?
-        ORDER BY lesson_order ASC
-      `;
-      return new Promise((resolve, reject) => {
-        db.all(sql, [courseId], (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        });
-      });
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // الحصول على الكورسات الأكثر مبيعاً
   static async getTopSelling(limit = 10) {
-    try {
-      const sql = `
-                SELECT c.*, COUNT(e.enrollment_id) as enrollment_count
-                FROM Courses c
-                LEFT JOIN Enrollments e ON c.course_id = e.course_id AND e.status = 'active'
-                GROUP BY c.course_id
-                ORDER BY enrollment_count DESC
-                LIMIT ?
-            `;
-
-      return new Promise((resolve, reject) => {
-        db.all(sql, [limit], (err, rows) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(rows);
-          }
-        });
-      });
-    } catch (error) {
-      throw error;
-    }
+    const sql = `
+      SELECT c.*, COUNT(e.enrollment_id) as enrollment_count
+      FROM Courses c
+      LEFT JOIN Enrollments e ON c.course_id = e.course_id AND e.status = 'active'
+      GROUP BY c.course_id
+      ORDER BY enrollment_count DESC
+      LIMIT $1
+    `;
+    const result = await db.query(sql, [limit]);
+    return result.rows;
   }
 
-  // التحقق من أن المستخدم يمكنه الوصول للكورس
   static async checkAccess(user, courseId) {
-    try {
-      const course = await Course.findById(courseId);
-
-      if (!canAccessCourse(user, course)) {
-        throw new Error("ليس لديك صلاحية الوصول لهذا الكورس");
-      }
-
-      return course;
-    } catch (error) {
-      throw error;
+    const course = await Course.findById(courseId);
+    if (!canAccessCourse(user, course)) {
+      throw new Error("ليس لديك صلاحية الوصول لهذا الكورس");
     }
+    return course;
   }
 }
 
 module.exports = Course;
+

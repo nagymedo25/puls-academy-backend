@@ -10,12 +10,13 @@ const errorHandler = (err, req, res, next) => {
         });
     }
 
-    if (err.code === 'SQLITE_CONSTRAINT') {
-        if (err.message.includes('UNIQUE constraint failed')) {
-            return res.status(400).json({
-                error: 'هذه البيانات موجودة بالفعل'
-            });
-        }
+    //
+    // ✨ التعديل الرئيسي: التعامل مع أخطاء PostgreSQL
+    //
+    if (err.code === '23505') { // 23505 is the code for unique_violation in PostgreSQL
+        return res.status(400).json({
+            error: 'هذه البيانات موجودة بالفعل'
+        });
     }
 
     if (err.name === 'MulterError') {

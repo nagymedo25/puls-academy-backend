@@ -10,294 +10,189 @@ const {
 class User {
   // إنشاء مستخدم جديد
   static async create(userData) {
+    const { name, email, phone, password, college, gender } = userData;
+    const password_hash = await hashPassword(password);
+    const sql = `
+      INSERT INTO Users (name, email, phone, password_hash, college, gender)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING user_id
+    `;
     try {
-      const { name, email, phone, password, college, gender } = userData;
-
-      // تشفير كلمة المرور
-      const password_hash = await hashPassword(password);
-
-      // إدخال المستخدم في قاعدة البيانات
-      const sql = `
-                INSERT INTO Users (name, email, phone, password_hash, college, gender)
-                VALUES (?, ?, ?, ?, ?, ?)
-            `;
-
-      return new Promise((resolve, reject) => {
-        db.run(
-          sql,
-          [name, email, phone, password_hash, college, gender],
-          function (err) {
-            if (err) {
-              if (err.code === "SQLITE_CONSTRAINT") {
-                reject(new Error("البريد الإلكتروني أو رقم الهاتف مسجل بالفعل"));
-              } else {
-                reject(err);
-              }
-            } else {
-              // إرجاع بيانات المستخدم الجديد
-              User.findById(this.lastID).then(resolve).catch(reject);
-            }
-          }
-        );
-      });
+      const result = await db.query(sql, [name, email, phone, password_hash, college, gender]);
+      return User.findById(result.rows[0].user_id);
     } catch (error) {
+      if (error.code === '23505') { // Unique violation
+        throw new Error("البريد الإلكتروني أو رقم الهاتف مسجل بالفعل");
+      }
       throw error;
     }
   }
 
   // البحث عن مستخدم بالمعرف
   static async findById(userId) {
-    const sql = "SELECT * FROM Users WHERE user_id = ?";
-
-    return new Promise((resolve, reject) => {
-      db.get(sql, [userId], (err, row) => {
-        if (err) {
-          reject(err);
-        } else if (!row) {
-          resolve(null);
-        } else {
-          resolve(createSafeUserData(row));
-        }
-      });
-    });
+    const sql = "SELECT * FROM Users WHERE user_id = $1";
+    const result = await db.query(sql, [userId]);
+    if (result.rows.length === 0) {
+      return null;
+    }
+    return createSafeUserData(result.rows[0]);
   }
 
   // البحث عن مستخدم بالبريد الإلكتروني
   static async findByEmail(email) {
-    const sql = "SELECT * FROM Users WHERE email = ?";
-
-    return new Promise((resolve, reject) => {
-      db.get(sql, [email], (err, row) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(row);
-        }
-      });
-    });
+    const sql = "SELECT * FROM Users WHERE email = $1";
+    const result = await db.query(sql, [email]);
+    return result.rows[0];
   }
-  
-  // دالة جديدة: البحث عن مستخدم برقم الهاتف
+
+  // البحث عن مستخدم برقم الهاتف
   static async findByPhone(phone) {
-    const sql = "SELECT * FROM Users WHERE phone = ?";
-    return new Promise((resolve, reject) => {
-      db.get(sql, [phone], (err, row) => {
-        if (err) reject(err);
-        else resolve(row);
-      });
-    });
+    const sql = "SELECT * FROM Users WHERE phone = $1";
+    const result = await db.query(sql, [phone]);
+    return result.rows[0];
   }
-
 
   // تسجيل الدخول
   static async login(emailOrPhone, password) {
-    try {
-      // البحث عن المستخدم بالبريد الإلكتروني أو رقم الهاتف
-      const user = emailOrPhone.includes('@')
-        ? await User.findByEmail(emailOrPhone)
-        : await User.findByPhone(emailOrPhone);
+    const user = emailOrPhone.includes('@')
+      ? await User.findByEmail(emailOrPhone)
+      : await User.findByPhone(emailOrPhone);
 
-      if (!user) {
-        throw new Error("البريد الإلكتروني أو كلمة المرور غير صحيحة");
-      }
-
-      // التحقق من كلمة المرور
-      const isPasswordValid = await comparePassword(
-        password,
-        user.password_hash
-      );
-
-      if (!isPasswordValid) {
-        throw new Error("البريد الإلكتروني أو كلمة المرور غير صحيحة");
-      }
-
-      // إرجاع بيانات المستخدم الآمنة
-      return createSafeUserData(user);
-    } catch (error) {
-      throw error;
+    if (!user) {
+      throw new Error("البريد الإلكتروني أو كلمة المرور غير صحيحة");
     }
+
+    const isPasswordValid = await comparePassword(
+      password,
+      user.password_hash
+    );
+
+    if (!isPasswordValid) {
+      throw new Error("البريد الإلكتروني أو كلمة المرور غير صحيحة");
+    }
+
+    return createSafeUserData(user);
   }
 
   // تحديث بيانات المستخدم
- static async update(userId, userData) {
+  static async update(userId, userData) {
+    const { name, email, phone, password, college, gender } = userData;
+    const updates = [];
+    const values = [];
+    let queryIndex = 1;
+
+    if (name !== undefined) {
+      updates.push(`name = $${queryIndex++}`);
+      values.push(name);
+    }
+    if (email !== undefined) {
+      updates.push(`email = $${queryIndex++}`);
+      values.push(email);
+    }
+    if (phone !== undefined) {
+      updates.push(`phone = $${queryIndex++}`);
+      values.push(phone);
+    }
+    if (college !== undefined) {
+      updates.push(`college = $${queryIndex++}`);
+      values.push(college);
+    }
+    if (gender !== undefined) {
+      updates.push(`gender = $${queryIndex++}`);
+      values.push(gender);
+    }
+    if (password) {
+      const password_hash = await hashPassword(password);
+      updates.push(`password_hash = $${queryIndex++}`);
+      values.push(password_hash);
+    }
+
+    if (updates.length === 0) {
+      throw new Error("لا توجد بيانات لتحديثها");
+    }
+
+    values.push(userId);
+    const sql = `UPDATE Users SET ${updates.join(", ")} WHERE user_id = $${queryIndex} RETURNING user_id`;
+
     try {
-      const { name, email, phone, password, college, gender } = userData;
-      const updates = [];
-      const values = [];
-
-      if (name !== undefined) {
-        updates.push("name = ?");
-        values.push(name);
+      const result = await db.query(sql, values);
+      if (result.rows.length === 0) {
+          throw new Error("المستخدم غير موجود");
       }
-      if (email !== undefined) {
-        updates.push("email = ?");
-        values.push(email);
-      }
-       if (phone !== undefined) {
-        updates.push("phone = ?");
-        values.push(phone);
-      }
-      if (college !== undefined) {
-        updates.push("college = ?");
-        values.push(college);
-      }
-      if (gender !== undefined) {
-        updates.push("gender = ?");
-        values.push(gender);
-      }
-
-      // تشفير كلمة المرور الجديدة فقط إذا تم إدخالها
-      if (password) {
-        const password_hash = await hashPassword(password);
-        updates.push("password_hash = ?");
-        values.push(password_hash);
-      }
-
-      if (updates.length === 0) {
-        throw new Error("لا توجد بيانات لتحديثها");
-      }
-
-      values.push(userId);
-      const sql = `UPDATE Users SET ${updates.join(", ")} WHERE user_id = ?`;
-
-      return new Promise((resolve, reject) => {
-        db.run(sql, values, function (err) {
-          if (err) {
-            if (err.code === "SQLITE_CONSTRAINT") {
-              reject(new Error("البريد الإلكتروني أو رقم الهاتف مسجل بالفعل"));
-            } else {
-              reject(err);
-            }
-          } else {
-            User.findById(userId).then(resolve).catch(reject);
-          }
-        });
-      });
+      return User.findById(result.rows[0].user_id);
     } catch (error) {
-      throw error;
+        if (error.code === '23505') {
+            throw new Error("البريد الإلكتروني أو رقم الهاتف مسجل بالفعل");
+        }
+        throw error;
     }
   }
+
   // تغيير كلمة المرور
   static async changePassword(userId, currentPassword, newPassword) {
-    try {
-      // الحصول على بيانات المستخدم الحالية
-      const user = await new Promise((resolve, reject) => {
-        db.get(
-          "SELECT * FROM Users WHERE user_id = ?",
-          [userId],
-          (err, row) => {
-            if (err) reject(err);
-            else resolve(row);
-          }
-        );
-      });
-
-      if (!user) {
-        throw new Error("المستخدم غير موجود");
-      }
-
-      // التحقق من كلمة المرور الحالية
-      const isCurrentPasswordValid = await comparePassword(
-        currentPassword,
-        user.password_hash
-      );
-
-      if (!isCurrentPasswordValid) {
-        throw new Error("كلمة المرور الحالية غير صحيحة");
-      }
-
-      // تشفير وتحديث كلمة المرور الجديدة
-      const newPasswordHash = await hashPassword(newPassword);
-
-      const sql = "UPDATE Users SET password_hash = ? WHERE user_id = ?";
-
-      return new Promise((resolve, reject) => {
-        db.run(sql, [newPasswordHash, userId], function (err) {
-          if (err) {
-            reject(err);
-          } else {
-            resolve({ message: "تم تغيير كلمة المرور بنجاح" });
-          }
-        });
-      });
-    } catch (error) {
-      throw error;
+    const userResult = await db.query("SELECT * FROM Users WHERE user_id = $1", [userId]);
+    if (userResult.rows.length === 0) {
+      throw new Error("المستخدم غير موجود");
     }
+    const user = userResult.rows[0];
+
+    const isCurrentPasswordValid = await comparePassword(
+      currentPassword,
+      user.password_hash
+    );
+
+    if (!isCurrentPasswordValid) {
+      throw new Error("كلمة المرور الحالية غير صحيحة");
+    }
+
+    const newPasswordHash = await hashPassword(newPassword);
+    const sql = "UPDATE Users SET password_hash = $1 WHERE user_id = $2";
+    await db.query(sql, [newPasswordHash, userId]);
+    return { message: "تم تغيير كلمة المرور بنجاح" };
   }
 
   // حذف مستخدم
   static async delete(userId) {
-    const sql = "DELETE FROM Users WHERE user_id = ?";
-
-    return new Promise((resolve, reject) => {
-      db.run(sql, [userId], function (err) {
-        if (err) {
-          reject(err);
-        } else if (this.changes === 0) {
-          reject(new Error("المستخدم غير موجود"));
-        } else {
-          resolve({ message: "تم حذف المستخدم بنجاح" });
-        }
-      });
-    });
+    const sql = "DELETE FROM Users WHERE user_id = $1";
+    const result = await db.query(sql, [userId]);
+    if (result.rowCount === 0) {
+        throw new Error("المستخدم غير موجود");
+    }
+    return { message: "تم حذف المستخدم بنجاح" };
   }
 
   // الحصول على جميع المستخدمين (للأدمن)
   static async getAll(limit = 50, offset = 0) {
     const sql = `
-            SELECT user_id, name, email, phone, role, college, gender, created_at
-            FROM Users 
-            WHERE role = 'student'
-            ORDER BY created_at DESC 
-            LIMIT ? OFFSET ?
-        `;
-
-    return new Promise((resolve, reject) => {
-      db.all(sql, [limit, offset], (err, rows) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(rows);
-        }
-      });
-    });
+      SELECT user_id, name, email, phone, role, college, gender, created_at
+      FROM Users
+      WHERE role = 'student'
+      ORDER BY created_at DESC
+      LIMIT $1 OFFSET $2
+    `;
+    const result = await db.query(sql, [limit, offset]);
+    return result.rows;
   }
+
   // الحصول على عدد المستخدمين (للإحصائيات)
   static async getCount() {
     const sql = "SELECT COUNT(*) as total FROM Users WHERE role = 'student'";
-
-    return new Promise((resolve, reject) => {
-      db.get(sql, [], (err, row) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(row.total);
-        }
-      });
-    });
+    const result = await db.query(sql);
+    return parseInt(result.rows[0].total, 10);
   }
 
   // البحث عن مستخدمين (للأدمن)
   static async search(query, limit = 20) {
     const sql = `
-            SELECT user_id, name, email, phone, role, college, gender, created_at
-            FROM Users 
-            WHERE (name LIKE ? OR email LIKE ? OR phone LIKE ?) AND role = 'student'
-            ORDER BY created_at DESC 
-            LIMIT ?
-        `;
-
+      SELECT user_id, name, email, phone, role, college, gender, created_at
+      FROM Users
+      WHERE (name ILIKE $1 OR email ILIKE $1 OR phone ILIKE $1) AND role = 'student'
+      ORDER BY created_at DESC
+      LIMIT $2
+    `;
     const searchTerm = `%${query}%`;
-
-    return new Promise((resolve, reject) => {
-      db.all(sql, [searchTerm, searchTerm, searchTerm, limit], (err, rows) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(rows);
-        }
-      });
-    });
+    const result = await db.query(sql, [searchTerm, limit]);
+    return result.rows;
   }
 }
 

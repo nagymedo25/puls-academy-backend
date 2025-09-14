@@ -4,67 +4,34 @@ const Payment = require("../models/Payment");
 const Enrollment = require("../models/Enrollment");
 const Notification = require("../models/Notification");
 const Course = require("../models/Course");
-const fs = require('fs');
-const path = require('path');
-const util = require('util');
-
-const unlinkFile = util.promisify(fs.unlink);
-
-const getFullImageUrl = (req, filename) => {
-  return `${req.protocol}://${req.get('host')}/uploads/${filename}`;
-};
-
-// ✨ هنا تم التعديل
-const deleteScreenshot = async (screenshotPath) => {
-    try {
-        if (!screenshotPath) return;
-
-        // الطريقة الجديدة والأكثر أمانًا لاستخراج اسم الملف من الرابط
-        const filename = screenshotPath.split('/').pop();
-        
-        if (!filename) {
-            console.error(`Could not extract filename from path: ${screenshotPath}`);
-            return;
-        }
-
-        const filePath = path.join(__dirname, '../temp_uploads', filename);
-
-        // التحقق من وجود الملف قبل محاولة حذفه
-        if (fs.existsSync(filePath)) {
-            await unlinkFile(filePath);
-            console.log(`Successfully deleted local file: ${filename}`);
-        } else {
-            console.warn(`File not found, could not delete: ${filePath}`);
-        }
-    } catch (error) {
-        console.error(`Error deleting local file for path ${screenshotPath}:`, error);
-    }
-};
-
+const { deleteFile } = require('../config/storage'); // Import the new delete function
 
 class PaymentController {
   static async createPayment(req, res) {
     try {
       const { course_id, amount, method } = req.body;
-      // ✨ التعديل الرئيسي هنا: استخلاص المعرف الصحيح من req.user
       const user_id = req.user.user_id;
 
       if (!course_id || !amount || !method) {
         return res.status(400).json({ error: "جميع الحقول مطلوبة" });
       }
 
+      // Check if a file was uploaded
       if (!req.file) {
         return res.status(400).json({ error: "صورة الإيصال مطلوبة" });
       }
 
-      const screenshot_url = getFullImageUrl(req, req.file.filename);
+      // Get the secure URL and public ID from the uploaded file (provided by Cloudinary)
+      const screenshot_url = req.file.path;
+      const screenshot_public_id = req.file.filename;
 
       const payment = await Payment.create({
-        user_id, // استخدام المتغير الصحيح هنا
-        course_id: parseInt(course_id), // ✨ تحسين: تحويل course_id إلى رقم
+        user_id,
+        course_id: parseInt(course_id),
         amount: parseFloat(amount),
         method,
-        screenshot_path: screenshot_url,
+        screenshot_url,
+        screenshot_public_id, // Save the public ID
       });
 
       const course = await Course.findById(course_id);
@@ -98,8 +65,10 @@ class PaymentController {
         updatedPayment.course_title
       );
 
-      // استدعاء دالة الحذف
-      await deleteScreenshot(paymentToProcess.screenshot_path);
+      // Delete the image from Cloudinary using its public ID
+      if (paymentToProcess.screenshot_public_id) {
+        await deleteFile(paymentToProcess.screenshot_public_id);
+      }
 
       res.json({
         message: "تم اعتماد الدفع بنجاح",
@@ -126,8 +95,10 @@ class PaymentController {
         payment.course_title
       );
 
-      // استدعاء دالة الحذف
-      await deleteScreenshot(paymentToProcess.screenshot_path);
+      // Delete the image from Cloudinary using its public ID
+      if (paymentToProcess.screenshot_public_id) {
+        await deleteFile(paymentToProcess.screenshot_public_id);
+      }
 
       res.json({
         message: "تم رفض الدفع",
@@ -198,6 +169,10 @@ class PaymentController {
   static async deletePayment(req, res) {
     try {
       const { paymentId } = req.params;
+      const paymentToDelete = await Payment.findById(paymentId);
+      if (paymentToDelete && paymentToDelete.screenshot_public_id) {
+          await deleteFile(paymentToDelete.screenshot_public_id);
+      }
       const result = await Payment.delete(paymentId);
       res.json(result);
     } catch (error) {
