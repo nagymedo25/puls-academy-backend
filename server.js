@@ -1,7 +1,12 @@
-// --- استيراد الحزم الأساسية ---
-const express = require('express');
-const cors = require('cors');
+// --- تهيئة التطبيق ---
 const dotenv = require('dotenv');
+const express = require('express');
+
+dotenv.config();
+const app = express();
+
+// --- استيراد الحزم الأساسية ---
+const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -18,9 +23,7 @@ const adminRoutes = require('./routes/adminRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 
-// --- تهيئة التطبيق ---
-dotenv.config();
-const app = express();
+
 
 // --- إعدادات الأمان والوسيط (Security & Middlewares) ---
 const corsOptions = {
