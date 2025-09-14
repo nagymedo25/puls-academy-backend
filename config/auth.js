@@ -18,6 +18,8 @@ const hashPassword = async (password) => {
     }
 };
 
+
+
 // دالة للتحقق من كلمة المرور
 const comparePassword = async (password, hashedPassword) => {
     try {
@@ -121,6 +123,7 @@ const createSafeUserData = (user) => {
         user_id: user.user_id,
         name: user.name,
         email: user.email,
+        phone: user.phone, 
         role: user.role,
         college: user.college,
         gender: user.gender,

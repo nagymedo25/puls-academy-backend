@@ -11,25 +11,25 @@ class User {
   // إنشاء مستخدم جديد
   static async create(userData) {
     try {
-      const { name, email, password, college, gender } = userData;
+      const { name, email, phone, password, college, gender } = userData;
 
       // تشفير كلمة المرور
       const password_hash = await hashPassword(password);
 
       // إدخال المستخدم في قاعدة البيانات
       const sql = `
-                INSERT INTO Users (name, email, password_hash, college, gender)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO Users (name, email, phone, password_hash, college, gender)
+                VALUES (?, ?, ?, ?, ?, ?)
             `;
 
       return new Promise((resolve, reject) => {
         db.run(
           sql,
-          [name, email, password_hash, college, gender],
+          [name, email, phone, password_hash, college, gender],
           function (err) {
             if (err) {
               if (err.code === "SQLITE_CONSTRAINT") {
-                reject(new Error("البريد الإلكتروني مسجل بالفعل"));
+                reject(new Error("البريد الإلكتروني أو رقم الهاتف مسجل بالفعل"));
               } else {
                 reject(err);
               }
@@ -46,24 +46,16 @@ class User {
   }
 
   // البحث عن مستخدم بالمعرف
-  // puls-academy-backend/models/User.js
-
-  // البحث عن مستخدم بالمعرف
   static async findById(userId) {
     const sql = "SELECT * FROM Users WHERE user_id = ?";
-
-    console.log("Running SQL:", sql, "with userId:", userId);
 
     return new Promise((resolve, reject) => {
       db.get(sql, [userId], (err, row) => {
         if (err) {
-          console.error("SQL Error:", err);
           reject(err);
         } else if (!row) {
-          console.warn("No user found for userId:", userId);
-          resolve(null); // بدل reject نرجع null عشان نقدر نشوف النتيجة
+          resolve(null);
         } else {
-          console.log("SQL Result:", row);
           resolve(createSafeUserData(row));
         }
       });
@@ -84,12 +76,26 @@ class User {
       });
     });
   }
+  
+  // دالة جديدة: البحث عن مستخدم برقم الهاتف
+  static async findByPhone(phone) {
+    const sql = "SELECT * FROM Users WHERE phone = ?";
+    return new Promise((resolve, reject) => {
+      db.get(sql, [phone], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+  }
+
 
   // تسجيل الدخول
-  static async login(email, password) {
+  static async login(emailOrPhone, password) {
     try {
-      // البحث عن المستخدم
-      const user = await User.findByEmail(email);
+      // البحث عن المستخدم بالبريد الإلكتروني أو رقم الهاتف
+      const user = emailOrPhone.includes('@')
+        ? await User.findByEmail(emailOrPhone)
+        : await User.findByPhone(emailOrPhone);
 
       if (!user) {
         throw new Error("البريد الإلكتروني أو كلمة المرور غير صحيحة");
@@ -115,8 +121,7 @@ class User {
   // تحديث بيانات المستخدم
  static async update(userId, userData) {
     try {
-      // ✨ بداية التعديلات
-      const { name, email, password, college, gender } = userData;
+      const { name, email, phone, password, college, gender } = userData;
       const updates = [];
       const values = [];
 
@@ -127,6 +132,10 @@ class User {
       if (email !== undefined) {
         updates.push("email = ?");
         values.push(email);
+      }
+       if (phone !== undefined) {
+        updates.push("phone = ?");
+        values.push(phone);
       }
       if (college !== undefined) {
         updates.push("college = ?");
@@ -143,7 +152,6 @@ class User {
         updates.push("password_hash = ?");
         values.push(password_hash);
       }
-      // ✨ نهاية التعديلات
 
       if (updates.length === 0) {
         throw new Error("لا توجد بيانات لتحديثها");
@@ -156,7 +164,7 @@ class User {
         db.run(sql, values, function (err) {
           if (err) {
             if (err.code === "SQLITE_CONSTRAINT") {
-              reject(new Error("البريد الإلكتروني مسجل بالفعل"));
+              reject(new Error("البريد الإلكتروني أو رقم الهاتف مسجل بالفعل"));
             } else {
               reject(err);
             }
@@ -236,9 +244,8 @@ class User {
 
   // الحصول على جميع المستخدمين (للأدمن)
   static async getAll(limit = 50, offset = 0) {
-    // ✨ تم تعديل الاستعلام هنا لعرض الطلاب فقط
     const sql = `
-            SELECT user_id, name, email, role, college, gender, created_at
+            SELECT user_id, name, email, phone, role, college, gender, created_at
             FROM Users 
             WHERE role = 'student'
             ORDER BY created_at DESC 
@@ -257,7 +264,6 @@ class User {
   }
   // الحصول على عدد المستخدمين (للإحصائيات)
   static async getCount() {
-    // ✨ تم إضافة شرط لاستثناء الأدمن من العد
     const sql = "SELECT COUNT(*) as total FROM Users WHERE role = 'student'";
 
     return new Promise((resolve, reject) => {
@@ -274,9 +280,9 @@ class User {
   // البحث عن مستخدمين (للأدمن)
   static async search(query, limit = 20) {
     const sql = `
-            SELECT user_id, name, email, role, college, gender, created_at
+            SELECT user_id, name, email, phone, role, college, gender, created_at
             FROM Users 
-            WHERE (name LIKE ? OR email LIKE ?) AND role = 'student' -- إضافة شرط role
+            WHERE (name LIKE ? OR email LIKE ? OR phone LIKE ?) AND role = 'student'
             ORDER BY created_at DESC 
             LIMIT ?
         `;
@@ -284,7 +290,7 @@ class User {
     const searchTerm = `%${query}%`;
 
     return new Promise((resolve, reject) => {
-      db.all(sql, [searchTerm, searchTerm, limit], (err, rows) => {
+      db.all(sql, [searchTerm, searchTerm, searchTerm, limit], (err, rows) => {
         if (err) {
           reject(err);
         } else {

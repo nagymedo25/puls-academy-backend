@@ -232,7 +232,6 @@ class AdminController {
     static async resetRevenue(req, res) {
         try {
             await Payment.deleteAll();
-            await Enrollment.deleteAll(); 
             res.json({ message: 'تمت إعادة تصفير الإيرادات وجميع التسجيلات بنجاح.' });
         } catch (error) {
             res.status(500).json({ error: error.message });

@@ -1,24 +1,28 @@
 // puls-academy-backend/middlewares/validationMiddleware.js
 
 const { validatePasswordStrength } = require("../config/auth");
+const { validatePhone, validateEmail } = require("../utils/helpers"); // استيراد دالة التحقق من الهاتف
 
 const validateRegistration = (req, res, next) => {
   try {
-    const { name, email, password, college, gender } = req.body;
+    const { name, email, phone, password, college, gender } = req.body;
 
-    if (!name || !email || !password || !college || !gender) {
-      return res.status(400).json({ error: "جميع الحقول مطلوبة" });
+    if (!name || !(email || phone) || !password || !college || !gender) {
+      return res.status(400).json({ error: "الاسم، كلمة المرور، الكلية، النوع، بالإضافة إلى البريد الإلكتروني أو رقم الهاتف هي حقول مطلوبة" });
     }
-
+    
     if (typeof name !== "string" || name.trim().length < 3) {
       return res
         .status(400)
         .json({ error: "الاسم يجب أن يكون 3 أحرف على الأقل" });
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (email && !validateEmail(email)) {
       return res.status(400).json({ error: "البريد الإلكتروني غير صالح" });
+    }
+
+    if (phone && !validatePhone(phone)) {
+        return res.status(400).json({ error: "رقم الهاتف غير صالح، يجب أن يكون رقمًا مصريًا صحيحًا." });
     }
 
     const passwordValidation = validatePasswordStrength(password);
@@ -44,17 +48,12 @@ const validateRegistration = (req, res, next) => {
 
 const validateLogin = (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { emailOrPhone, password } = req.body;
 
-    if (!email || !password) {
+    if (!emailOrPhone || !password) {
       return res
         .status(400)
-        .json({ error: "البريد الإلكتروني وكلمة المرور مطلوبان" });
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ error: "البريد الإلكتروني غير صالح" });
+        .json({ error: "البريد الإلكتروني/رقم الهاتف وكلمة المرور مطلوبان" });
     }
 
     next();
@@ -63,6 +62,7 @@ const validateLogin = (req, res, next) => {
   }
 };
 
+// ... باقي الدوال تبقى كما هي ...
 const validateCourseCreation = (req, res, next) => {
   try {
     const {
@@ -75,13 +75,12 @@ const validateCourseCreation = (req, res, next) => {
       thumbnail_url,
     } = req.body;
 
-    // ✨ تعديل 1: التحقق من وجود جميع الحقول بشكل دقيق
     if (
       !title ||
       !description ||
       !category ||
       !college_type ||
-      price === undefined || price === '' || // <-- هذا هو الإصلاح الرئيسي
+      price === undefined || price === '' ||
       !preview_url ||
       !thumbnail_url
     ) {
@@ -152,7 +151,7 @@ const validatePaymentCreation = (req, res, next) => {
 
 const validateProfileUpdate = (req, res, next) => {
   try {
-    const { name, email, college, gender } = req.body;
+    const { name, email, phone, college, gender } = req.body;
 
     if (name && (typeof name !== "string" || name.trim().length < 3)) {
       return res
@@ -160,11 +159,12 @@ const validateProfileUpdate = (req, res, next) => {
         .json({ error: "الاسم يجب أن يكون 3 أحرف على الأقل" });
     }
 
-    if (email) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
+    if (email && !validateEmail(email)) {
         return res.status(400).json({ error: "البريد الإلكتروني غير صالح" });
-      }
+    }
+
+    if (phone && !validatePhone(phone)) {
+        return res.status(400).json({ error: "رقم الهاتف غير صالح" });
     }
 
     if (college) {
@@ -186,6 +186,7 @@ const validateProfileUpdate = (req, res, next) => {
     res.status(500).json({ error: "خطأ في التحقق من البيانات" });
   }
 };
+
 
 module.exports = {
   validateRegistration,

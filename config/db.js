@@ -20,7 +20,8 @@ const createTables = () => {
         db.run(`CREATE TABLE IF NOT EXISTS Users (
             user_id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            email TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE,
+            phone TEXT UNIQUE,
             password_hash TEXT NOT NULL,
             role TEXT DEFAULT 'student' CHECK(role IN ('student', 'admin')),
             college TEXT NOT NULL CHECK(college IN ('pharmacy', 'dentistry')),
