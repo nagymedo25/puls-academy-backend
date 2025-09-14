@@ -3,6 +3,8 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
+console.log('DATABASE_URL from environment:', process.env.DATABASE_URL);
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   // Add SSL configuration for production environments like Neon, Heroku, etc.
