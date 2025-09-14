@@ -104,7 +104,7 @@ class AuthController {
   static async changePassword(req, res) {
     try {
       const { currentPassword, newPassword } = req.body;
-      const userId = req.user.user_id; 
+      const userId = req.user.user_id;
 
       if (!currentPassword || !newPassword) {
         return res
@@ -125,10 +125,17 @@ class AuthController {
   }
 
   static async logout(req, res) {
-    res.cookie("token", "loggedout", {
-      expires: new Date(Date.now() + 10 * 1000),
+    const cookieOptions = {
       httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "none",
+    };
+
+    res.cookie("token", "loggedout", {
+      ...cookieOptions,
+      expires: new Date(0), // تعيين تاريخ انتهاء الصلاحية في الماضي
     });
+
     res.status(200).json({ message: "تم تسجيل الخروج بنجاح" });
   }
 }
