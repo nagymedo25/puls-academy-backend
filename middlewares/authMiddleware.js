@@ -4,9 +4,9 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 // ✨ 1. استيراد المفتاح السري الموحّد من ملف الإعدادات
 const { JWT_SECRET } = require('../config/auth');
+const { db } = require('../config/db');
 
 const authMiddleware = async (req, res, next) => {
-    // قراءة التوكن من الـ httpOnly cookie
     const token = req.cookies.token;
 
     if (!token) {
@@ -14,27 +14,39 @@ const authMiddleware = async (req, res, next) => {
     }
 
     try {
-        // ✨ 2. استخدام المتغير المستورد للتحقق من التوكن
         const decoded = jwt.verify(token, JWT_SECRET);
         
-        // البحث عن المستخدم في قاعدة البيانات للتأكد من أنه لا يزال موجوداً
-        const user = await User.findById(decoded.userId);
-        
-        if (!user) {
-            return res.status(401).json({ error: 'المستخدم غير موجود.' });
+        // === START: التحقق من الجلسة النشطة ===
+        const sessionResult = await db.query(
+            'SELECT * FROM ActiveSessions WHERE user_id = $1 AND session_token = $2',
+            [decoded.userId, decoded.sessionId]
+        );
+
+        if (sessionResult.rowCount === 0) {
+            // إذا لم يتم العثور على الجلسة، فهذا يعني أنه تم تسجيل الخروج أو تسجيل الدخول من جهاز آخر
+            return res.status(401).json({ error: 'الجلسة غير صالحة. قد يكون تم تسجيل الدخول من جهاز آخر.' });
         }
         
-        // إرفاق بيانات المستخدم الآمنة في كائن الطلب
+        // تحديث آخر ظهور للجلسة
+        await db.query('UPDATE ActiveSessions SET last_seen = CURRENT_TIMESTAMP WHERE session_id = $1', [sessionResult.rows[0].session_id]);
+        // === END: التحقق من الجلسة النشطة ===
+
+        const user = await User.findById(decoded.userId);
+        
+        if (!user || user.status === 'suspended') {
+            return res.status(401).json({ error: 'المستخدم غير موجود أو حسابه معلق.' });
+        }
+        
         req.user = user;
         
-        next(); // الانتقال إلى الخطوة التالية
+        next();
     } catch (error) {
-        // التعامل مع أخطاء التوكن المختلفة
         if (error.name === 'TokenExpiredError') {
             return res.status(401).json({ error: 'انتهت صلاحية الجلسة، يرجى تسجيل الدخول مرة أخرى.' });
         }
         res.status(400).json({ error: 'التوكن غير صالح.' });
     }
 };
+
 
 module.exports = { authMiddleware };

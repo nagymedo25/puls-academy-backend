@@ -26,4 +26,15 @@ router.get('/revenue/report', authMiddleware, adminMiddleware, AdminController.g
 router.get('/payments/approved', authMiddleware, adminMiddleware, AdminController.getApprovedPayments);
 router.delete('/revenue/reset', authMiddleware, adminMiddleware, AdminController.resetRevenue);
 
+// إدارة طلبات الأجهزة
+router.get('/device-requests', authMiddleware, adminMiddleware, AdminController.getDeviceRequests);
+router.put('/device-requests/:requestId/approve', authMiddleware, adminMiddleware, AdminController.approveDeviceRequest);
+router.put('/device-requests/:requestId/reject', authMiddleware, adminMiddleware, AdminController.rejectDeviceRequest);
+
+// إدارة المخالفات
+router.get('/violations', authMiddleware, adminMiddleware, AdminController.getViolators);
+router.put('/users/:userId/suspend', authMiddleware, adminMiddleware, AdminController.suspendUser);
+router.put('/users/:userId/reactivate', authMiddleware, adminMiddleware, AdminController.reactivateUser);
+
+
 module.exports = router;

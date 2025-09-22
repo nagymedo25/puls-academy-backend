@@ -6,6 +6,7 @@ const {
   comparePassword,
   createSafeUserData,
 } = require("../config/auth");
+const { v4: uuidv4 } = require('uuid');
 
 class User {
   // إنشاء مستخدم جديد
@@ -53,7 +54,7 @@ class User {
   }
 
   // تسجيل الدخول
-  static async login(emailOrPhone, password) {
+  static async login(emailOrPhone, password, deviceInfo) {
     const user = emailOrPhone.includes('@')
       ? await User.findByEmail(emailOrPhone)
       : await User.findByPhone(emailOrPhone);
@@ -62,16 +63,137 @@ class User {
       throw new Error("البريد الإلكتروني أو كلمة المرور غير صحيحة");
     }
 
-    const isPasswordValid = await comparePassword(
-      password,
-      user.password_hash
-    );
+    if (user.status === 'suspended') {
+        throw new Error("هذا الحساب معلق. يرجى التواصل مع الدعم الفني.");
+    }
 
+    const isPasswordValid = await comparePassword(password, user.password_hash);
     if (!isPasswordValid) {
       throw new Error("البريد الإلكتروني أو كلمة المرور غير صحيحة");
     }
 
-    return createSafeUserData(user);
+    // --- الطبقة الأولى: التحقق من الجهاز ---
+    const isDeviceApproved = await User.isDeviceApproved(user.user_id, deviceInfo.fingerprint);
+    
+    if (!isDeviceApproved) {
+        // إذا كان الجهاز غير معتمد، قم بإنشاء طلب وانتظر الموافقة
+        await User.createDeviceLoginRequest(user.user_id, deviceInfo);
+        return {
+            status: 'pending_approval',
+            message: 'هذا جهاز جديد. تم إرسال طلب للمشرف للموافقة على تسجيل دخولك من هذا الجهاز.'
+        };
+    }
+
+    // --- الطبقة الثانية: التحقق من الجلسات المتزامنة ---
+    const existingSession = await User.getActiveSession(user.user_id);
+    if (existingSession) {
+        // تسجيل مخالفة وحذف الجلسة القديمة
+        await User.recordViolation(user.user_id, 'concurrent_login', {
+            message: `محاولة تسجيل دخول متزامنة من جهاز جديد. تم تسجيل الخروج من الجلسة القديمة.`,
+            newDevice: deviceInfo
+        });
+        await User.deleteSession(user.user_id);
+    }
+
+    // إنشاء جلسة جديدة
+    const sessionToken = await User.createSession(user.user_id);
+
+    return {
+        status: 'success',
+        message: 'تم تسجيل الدخول بنجاح',
+        user: createSafeUserData(user),
+        token: sessionToken,
+    };
+  }
+
+
+  // دوال مساعدة لنظام الحماية
+  static async isDeviceApproved(userId, fingerprint) {
+      const client = await db.connect();
+      try {
+          // التحقق مما إذا كان المستخدم لديه أي أجهزة معتمدة على الإطلاق
+          const approvedDevicesResult = await client.query('SELECT 1 FROM UserDevices WHERE user_id = $1 LIMIT 1', [userId]);
+          if (approvedDevicesResult.rowCount === 0) {
+              // هذا أول جهاز للمستخدم، قم باعتماده تلقائياً
+              await client.query(
+                  'INSERT INTO UserDevices (user_id, device_fingerprint) VALUES ($1, $2)',
+                  [userId, fingerprint]
+              );
+              return true;
+          }
+
+          // إذا كان لدى المستخدم أجهزة، تحقق مما إذا كان هذا الجهاز من بينها
+          const deviceResult = await client.query(
+              'SELECT 1 FROM UserDevices WHERE user_id = $1 AND device_fingerprint = $2',
+              [userId, fingerprint]
+          );
+          return deviceResult.rowCount > 0;
+      } finally {
+          client.release();
+      }
+  }
+
+  static async createDeviceLoginRequest(userId, deviceInfo) {
+      await db.query(
+          'INSERT INTO DeviceLoginRequests (user_id, device_fingerprint, user_agent, ip_address) VALUES ($1, $2, $3, $4)',
+          [userId, deviceInfo.fingerprint, deviceInfo.userAgent, deviceInfo.ipAddress]
+      );
+  }
+
+  static async getActiveSession(userId) {
+      const result = await db.query('SELECT * FROM ActiveSessions WHERE user_id = $1', [userId]);
+      return result.rows[0];
+  }
+  
+  static async createSession(userId) {
+      const sessionToken = uuidv4();
+      await db.query(
+          'INSERT INTO ActiveSessions (user_id, session_token) VALUES ($1, $2)',
+          [userId, sessionToken]
+      );
+      return sessionToken;
+  }
+  
+  static async deleteSession(userId) {
+      await db.query('DELETE FROM ActiveSessions WHERE user_id = $1', [userId]);
+  }
+  
+  static async recordViolation(userId, type, details) {
+      const client = await db.connect();
+      try {
+          await client.query('BEGIN');
+          await client.query(
+              'INSERT INTO Violations (user_id, violation_type, details) VALUES ($1, $2, $3)',
+              [userId, type, JSON.stringify(details)]
+          );
+          const result = await client.query(
+              'UPDATE Users SET violation_count = violation_count + 1 WHERE user_id = $1 RETURNING violation_count',
+              [userId]
+          );
+          await client.query('COMMIT');
+          return result.rows[0].violation_count;
+      } catch (e) {
+          await client.query('ROLLBACK');
+          throw e;
+      } finally {
+          client.release();
+      }
+  }
+  
+  // دوال جديدة للادمن
+  static async getViolators() {
+      const result = await db.query("SELECT user_id, name, email, phone, violation_count, status FROM Users WHERE violation_count >= 2 ORDER BY violation_count DESC");
+      return result.rows;
+  }
+  
+  static async suspend(userId) {
+      await db.query("UPDATE Users SET status = 'suspended' WHERE user_id = $1", [userId]);
+      return { message: 'تم تعليق حساب المستخدم بنجاح' };
+  }
+  
+  static async reactivate(userId) {
+      await db.query("UPDATE Users SET status = 'active', violation_count = 0 WHERE user_id = $1", [userId]);
+      return { message: 'تمت إعادة تفعيل حساب المستخدم وإعادة تعيين المخالفات' };
   }
 
   // تحديث بيانات المستخدم

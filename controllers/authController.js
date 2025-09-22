@@ -50,23 +50,35 @@ class AuthController {
 
   static async login(req, res) {
     try {
-      const { emailOrPhone, password } = req.body;
+      const { emailOrPhone, password, deviceFingerprint } = req.body;
 
-      if (!emailOrPhone || !password) {
+      if (!emailOrPhone || !password || !deviceFingerprint) {
         return res
           .status(400)
-          .json({ error: "البريد الإلكتروني/رقم الهاتف وكلمة المرور مطلوبان" });
+          .json({ error: "البيانات المطلوبة غير كاملة" });
       }
 
-      const user = await User.login(emailOrPhone, password);
-      const token = generateToken(user);
+      const deviceInfo = {
+        fingerprint: deviceFingerprint,
+        userAgent: req.headers['user-agent'],
+        ipAddress: req.ip
+      };
 
-      sendTokenCookie(res, token);
+      const result = await User.login(emailOrPhone, password, deviceInfo);
 
-      res.json({
-        message: "تم تسجيل الدخول بنجاح",
-        user,
-      });
+      if (result.status === 'pending_approval') {
+        return res.status(403).json({ error: result.message });
+      }
+
+      if (result.status === 'success') {
+        const jwtToken = generateToken(result.user, result.token); // نمرر session_token
+        sendTokenCookie(res, jwtToken);
+        return res.json({
+          message: result.message,
+          user: result.user,
+        });
+      }
+
     } catch (error) {
       res.status(401).json({ error: error.message });
     }

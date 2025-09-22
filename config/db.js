@@ -14,6 +14,8 @@ const pool = new Pool({
 const createTables = async () => {
   const client = await pool.connect();
   try {
+    // === START: تعديلات وتحديثات ===
+    // 1. تحديث جدول المستخدمين
     await client.query(`
       CREATE TABLE IF NOT EXISTS Users (
           user_id SERIAL PRIMARY KEY,
@@ -24,10 +26,62 @@ const createTables = async () => {
           role TEXT DEFAULT 'student' CHECK(role IN ('student', 'admin')),
           college TEXT NOT NULL CHECK(college IN ('pharmacy', 'dentistry')),
           gender TEXT NOT NULL CHECK(gender IN ('male', 'female')),
-          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          -- الحقول الجديدة لنظام الحماية --
+          violation_count INTEGER DEFAULT 0,
+          status TEXT DEFAULT 'active' CHECK(status IN ('active', 'suspended'))
       )
     `);
 
+    // 2. إنشاء جدول الأجهزة المعتمدة
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS UserDevices (
+        device_id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES Users(user_id) ON DELETE CASCADE,
+        device_fingerprint TEXT NOT NULL,
+        user_agent TEXT,
+        approved_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, device_fingerprint)
+      )
+    `);
+
+    // 3. إنشاء جدول طلبات الدخول من الأجهزة الجديدة
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS DeviceLoginRequests (
+        request_id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES Users(user_id) ON DELETE CASCADE,
+        device_fingerprint TEXT NOT NULL,
+        user_agent TEXT,
+        ip_address TEXT,
+        status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 4. إنشاء جدول الجلسات النشطة
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ActiveSessions (
+        session_id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES Users(user_id) ON DELETE CASCADE,
+        session_token TEXT NOT NULL UNIQUE,
+        last_seen TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 5. إنشاء جدول المخالفات
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS Violations (
+        violation_id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES Users(user_id) ON DELETE CASCADE,
+        violation_type TEXT NOT NULL,
+        details TEXT,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // === END: تعديلات وتحديثات ===
+
+    // الجداول الأخرى تبقى كما هي
     await client.query(`
       CREATE TABLE IF NOT EXISTS Courses (
           course_id SERIAL PRIMARY KEY,
@@ -100,6 +154,7 @@ const createTables = async () => {
           is_read BOOLEAN DEFAULT FALSE
       )
     `);
+
   } finally {
     client.release();
   }
@@ -136,4 +191,5 @@ const initializeDatabase = async () => {
 module.exports = {
   db: pool,
   initializeDatabase,
+  generateSessionToken: () => uuidv4(),
 };

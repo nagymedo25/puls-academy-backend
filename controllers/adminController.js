@@ -300,6 +300,94 @@ class AdminController {
             res.status(400).json({ error: error.message });
         }
     }
+
+    static async getDeviceRequests(req, res) {
+        try {
+            const result = await db.query(
+                `SELECT dr.*, u.name as user_name, u.email as user_email 
+                 FROM DeviceLoginRequests dr
+                 JOIN Users u ON dr.user_id = u.user_id
+                 WHERE dr.status = 'pending'
+                 ORDER BY dr.created_at ASC`
+            );
+            res.json({ requests: result.rows });
+        } catch (error) {
+            res.status(500).json({ error: "فشل في جلب طلبات الأجهزة: " + error.message });
+        }
+    }
+
+    static async approveDeviceRequest(req, res) {
+        const { requestId } = req.params;
+        const client = await db.connect();
+        try {
+            await client.query('BEGIN');
+            // الحصول على معلومات الطلب
+            const requestResult = await client.query('SELECT * FROM DeviceLoginRequests WHERE request_id = $1', [requestId]);
+            if (requestResult.rowCount === 0) {
+                throw new Error('الطلب غير موجود');
+            }
+            const request = requestResult.rows[0];
+
+            // إضافة الجهاز إلى قائمة الأجهزة المعتمدة
+            await client.query(
+                'INSERT INTO UserDevices (user_id, device_fingerprint, user_agent) VALUES ($1, $2, $3)',
+                [request.user_id, request.device_fingerprint, request.user_agent]
+            );
+
+            // تحديث حالة الطلب
+            await client.query("UPDATE DeviceLoginRequests SET status = 'approved' WHERE request_id = $1", [requestId]);
+
+            // (اختياري) إرسال إشعار للطالب
+            // await Notification.create({ user_id: request.user_id, message: 'تمت الموافقة على جهازك الجديد. يمكنك الآن تسجيل الدخول منه.' });
+
+            await client.query('COMMIT');
+            res.json({ message: 'تمت الموافقة على الجهاز بنجاح' });
+        } catch (error) {
+            await client.query('ROLLBACK');
+            res.status(400).json({ error: error.message });
+        } finally {
+            client.release();
+        }
+    }
+
+    static async rejectDeviceRequest(req, res) {
+        try {
+            const { requestId } = req.params;
+            await db.query("UPDATE DeviceLoginRequests SET status = 'rejected' WHERE request_id = $1", [requestId]);
+            res.json({ message: 'تم رفض الجهاز بنجاح' });
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    }
+
+    static async getViolators(req, res) {
+        try {
+            const users = await User.getViolators();
+            res.json({ users });
+        } catch (error) {
+            res.status(500).json({ error: "فشل في جلب الطلاب المخالفين: " + error.message });
+        }
+    }
+
+    static async suspendUser(req, res) {
+        try {
+            const { userId } = req.params;
+            const result = await User.suspend(userId);
+            res.json(result);
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    }
+
+    static async reactivateUser(req, res) {
+        try {
+            const { userId } = req.params;
+            const result = await User.reactivate(userId);
+            res.json(result);
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    }
 }
 
 module.exports = AdminController;
