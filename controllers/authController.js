@@ -2,6 +2,8 @@
 
 const User = require("../models/User");
 const { generateToken } = require("../config/auth");
+const { db } = require("../config/db"); // Import db for session management
+const { v4: uuidv4 } = require('uuid'); // Import uuid for session token
 
 const sendTokenCookie = (res, token) => {
   const cookieOptions = {
@@ -29,16 +31,26 @@ class AuthController {
         password,
         college,
         gender,
-        is_verified: true,
+        is_verified: true, // Assuming auto-verification for now
       });
 
-      const token = generateToken(user);
-      sendTokenCookie(res, token);
+      // ✨ --- START: FIX FOR NEW USER SESSION --- ✨
+      // 1. Create a new session for the newly registered user.
+      const sessionToken = uuidv4();
+      await db.query(
+          'INSERT INTO ActiveSessions (user_id, session_token) VALUES ($1, $2)',
+          [user.user_id, sessionToken]
+      );
+
+      // 2. Generate a JWT that includes the new session ID.
+      const jwtToken = generateToken(user, sessionToken);
+      sendTokenCookie(res, jwtToken);
+      // ✨ --- END: FIX FOR NEW USER SESSION --- ✨
 
       res.status(201).json({
         message: "تم إنشاء الحساب بنجاح",
         user,
-        token,
+        token: jwtToken, // Send the correct token
       });
     } catch (error) {
       if (error.message.includes("مسجل بالفعل")) {
@@ -71,7 +83,8 @@ class AuthController {
       }
 
       if (result.status === 'success') {
-        const jwtToken = generateToken(result.user, result.token); // نمرر session_token
+        // ✨ Pass the session token to generateToken
+        const jwtToken = generateToken(result.user, result.token); 
         sendTokenCookie(res, jwtToken);
         return res.json({
           message: result.message,

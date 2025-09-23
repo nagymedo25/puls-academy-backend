@@ -32,14 +32,15 @@ const comparePassword = async (password, hashedPassword) => {
 };
 
 // دالة لإنشاء توكن JWT
-const generateToken = (user) => {
+const generateToken = (user, sessionId) => {
     try {
         const payload = {
             userId: user.user_id,
             email: user.email,
             role: user.role,
             college: user.college,
-            gender: user.gender
+            gender: user.gender,
+            sessionId: sessionId, // Add the session ID here
         };
         
         const token = jwt.sign(payload, JWT_SECRET, {

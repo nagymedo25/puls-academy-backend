@@ -1,3 +1,5 @@
+// puls-academy-backend/middlewares/authMiddleware.js
+
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { JWT_SECRET } = require('../config/auth');
@@ -21,17 +23,18 @@ const authMiddleware = async (req, res, next) => {
             return res.status(403).json({ error: 'هذا الحساب معلق.' });
         }
         
-        // ✨ --- START: تعديل للتحقق من الجلسة وإعفاء الأدمن --- ✨
-        // -->> الشرط الجديد: إذا كان المستخدم هو الأدمن، اسمح له بالمرور مباشرة <<--
+        // ✨ --- START: The Fix --- ✨
+        // If the user is an admin, bypass the session check entirely.
         if (user.role === 'admin') {
             req.user = user;
             return next();
         }
-
-        // -->> هذا المنطق الآن يعمل فقط للطلاب <<--
+        // ✨ --- END: The Fix --- ✨
+        
+        // This logic now only applies to students
         const sessionResult = await db.query(
             'SELECT * FROM ActiveSessions WHERE user_id = $1 AND session_token = $2',
-            [decoded.userId, decoded.sessionId]
+            [decoded.userId, decoded.sessionId] // Assuming sessionId is in the token for students
         );
 
         if (sessionResult.rowCount === 0) {
@@ -39,7 +42,6 @@ const authMiddleware = async (req, res, next) => {
         }
         
         await db.query('UPDATE ActiveSessions SET last_seen = CURRENT_TIMESTAMP WHERE session_id = $1', [sessionResult.rows[0].session_id]);
-        // ✨ --- END: تعديل للتحقق من الجلسة --- ✨
         
         req.user = user;
         next();
