@@ -388,6 +388,37 @@ class AdminController {
             res.status(400).json({ error: error.message });
         }
     }
+
+      static async getConversations(req, res) {
+        try {
+            const conversations = await Message.getConversations();
+            res.json({ conversations });
+        } catch (error) {
+            res.status(500).json({ error: "فشل في جلب المحادثات: " + error.message });
+        }
+    }
+
+    static async getMessagesWithUser(req, res) {
+        try {
+            const { userId } = req.params;
+            const adminId = req.user.user_id; // نفترض أن الأدمن هو المستخدم المسجل دخوله
+            const messages = await Message.getMessagesBetweenUsers(adminId, userId);
+            res.json({ messages });
+        } catch (error) {
+            res.status(500).json({ error: "فشل في جلب الرسائل: " + error.message });
+        }
+    }
+
+    static async sendMessageToUser(req, res) {
+        try {
+            const { receiver_id, message_content } = req.body;
+            const sender_id = req.user.user_id; // الأدمن هو المرسل
+            const newMessage = await Message.create({ sender_id, receiver_id, message_content });
+            res.status(201).json({ message: "تم إرسال الرسالة بنجاح", newMessage });
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    }
 }
 
 module.exports = AdminController;

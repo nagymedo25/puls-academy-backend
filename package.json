@@ -17,6 +17,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "migrate": "node scripts/migrate.js",
+    "db:reset": "node scripts/reset-database.js",
     "seed": "node scripts/seed.js",
     "build": "npm install"
   },

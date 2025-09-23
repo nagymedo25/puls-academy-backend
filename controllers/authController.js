@@ -137,18 +137,34 @@ class AuthController {
   }
 
   static async logout(req, res) {
-    const cookieOptions = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "none",
-    };
+    try {
+        const token = req.cookies.token;
 
-    res.cookie("token", "loggedout", {
-      ...cookieOptions,
-      expires: new Date(0), // تعيين تاريخ انتهاء الصلاحية في الماضي
-    });
+        // الخطوة 1: حذف الجلسة من قاعدة البيانات
+        if (token) {
+            try {
+                const decoded = jwt.verify(token, process.env.JWT_SECRET);
+                if (decoded.sessionId) {
+                    await db.query('DELETE FROM ActiveSessions WHERE session_token = $1', [decoded.sessionId]);
+                }
+            } catch (err) {
+                // تجاهل الأخطاء إذا كان التوكن غير صالح، المهم هو حذف الكوكي
+                console.error("Error decoding token on logout, proceeding to clear cookie:", err.message);
+            }
+        }
 
-    res.status(200).json({ message: "تم تسجيل الخروج بنجاح" });
+        // الخطوة 2: حذف الكوكي من المتصفح
+        const cookieOptions = {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        };
+        res.clearCookie('token', cookieOptions);
+
+        res.json({ message: 'تم تسجيل الخروج بنجاح' });
+    } catch (error) {
+        res.status(500).json({ error: 'حدث خطأ أثناء تسجيل الخروج' });
+    }
   }
 }
 
