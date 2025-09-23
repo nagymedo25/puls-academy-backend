@@ -21,6 +21,33 @@ class Lesson {
     return result.rows[0];
   }
 
+    static async update(lessonId, lessonData) {
+    const updates = [];
+    const values = [];
+    let paramIndex = 1;
+
+    // Fields that can be updated
+    for (const key of ['title', 'description', 'video_url']) {
+        if (lessonData[key] !== undefined) {
+            updates.push(`${key} = $${paramIndex++}`);
+            values.push(lessonData[key]);
+        }
+    }
+
+    if (updates.length === 0) {
+      throw new Error("لا توجد بيانات لتحديثها");
+    }
+
+    values.push(lessonId);
+    const sql = `UPDATE Lessons SET ${updates.join(", ")} WHERE lesson_id = $${paramIndex} RETURNING *`;
+    const result = await db.query(sql, values);
+
+    if (result.rowCount === 0) {
+      throw new Error("الدرس غير موجود");
+    }
+    return result.rows[0];
+  }
+
   static async findById(lessonId) {
     const sql = `
       SELECT l.*, c.title as course_title, c.category as course_category, c.college_type as course_college_type

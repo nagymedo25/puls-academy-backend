@@ -89,6 +89,7 @@ const createTables = async () => {
           description TEXT,
           category TEXT NOT NULL CHECK(category IN ('pharmacy', 'dentistry')),
           college_type TEXT NOT NULL CHECK(college_type IN ('male', 'female')),
+          pharmacy_type TEXT CHECK(pharmacy_type IN ('clinical', 'pharm-d')), -- This column was missing
           price REAL NOT NULL,
           thumbnail_url TEXT,
           preview_url TEXT,

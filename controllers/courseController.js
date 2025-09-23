@@ -6,15 +6,15 @@ const Enrollment = require("../models/Enrollment");
 // تم حذف الدوال الخاصة بـ Google Drive لأنها لم تعد ضرورية
 
 class CourseController {
-  static async getAllCourses(req, res) {
+ static async getAllCourses(req, res) {
     try {
       // ✨ --- START: THE FIX --- ✨
-      const { category, college_type, pharmacy_type, min_price, max_price, limit, offset } = req.query;
+      // تم تجاهل college_type هنا عمداً
+      const { category, pharmacy_type, min_price, max_price, limit, offset } = req.query;
 
       const filters = {};
       if (category) filters.category = category;
-      if (college_type) filters.college_type = college_type;
-      if (pharmacy_type) filters.pharmacy_type = pharmacy_type; // Added this line
+      if (pharmacy_type) filters.pharmacy_type = pharmacy_type;
       // ✨ --- END: THE FIX --- ✨
       if (min_price) filters.min_price = parseFloat(min_price);
       if (max_price) filters.max_price = parseFloat(max_price);
@@ -27,6 +27,7 @@ class CourseController {
       res.status(500).json({ error: error.message });
     }
   }
+
   static async getCourseById(req, res) {
     try {
       const { courseId } = req.params;
@@ -48,26 +49,29 @@ class CourseController {
 
   static async createCourse(req, res) {
     try {
+      // ✨ --- START: THE FIX --- ✨
       const {
         title,
         description,
         category,
         college_type,
+        pharmacy_type, // This was missing
         price,
         preview_url,
         thumbnail_url,
       } = req.body;
 
-      // يتم الآن حفظ الروابط المباشرة من Bunny.net كما هي
       const course = await Course.create({
         title,
         description,
         category,
         college_type,
+        pharmacy_type, // Added it here
         price: parseFloat(price),
         preview_url: preview_url,
         thumbnail_url: thumbnail_url,
       });
+      // ✨ --- END: THE FIX --- ✨
 
       res.status(201).json({ message: "تم إنشاء الكورس بنجاح", course });
     } catch (error) {
@@ -133,6 +137,19 @@ class CourseController {
       res.json({ lessons });
     } catch (error) {
       res.status(500).json({ error: error.message });
+    }
+  }
+
+    static async updateLesson(req, res) {
+    try {
+      const { lessonId } = req.params;
+      const lessonDataToUpdate = { ...req.body };
+
+      const updatedLesson = await Lesson.update(lessonId, lessonDataToUpdate);
+
+      res.json({ message: "تم تحديث الدرس بنجاح", lesson: updatedLesson });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
     }
   }
 
