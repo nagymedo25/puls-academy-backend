@@ -26,8 +26,8 @@ const createTables = async () => {
           role TEXT DEFAULT 'student' CHECK(role IN ('student', 'admin')),
           college TEXT NOT NULL CHECK(college IN ('pharmacy', 'dentistry')),
           gender TEXT NOT NULL CHECK(gender IN ('male', 'female')),
+          pharmacy_type TEXT CHECK(pharmacy_type IN ('clinical', 'pharm-d')), -- Added this line
           created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-          -- الحقول الجديدة لنظام الحماية --
           violation_count INTEGER DEFAULT 0,
           status TEXT DEFAULT 'active' CHECK(status IN ('active', 'suspended'))
       )

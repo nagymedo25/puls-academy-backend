@@ -8,12 +8,14 @@ const Enrollment = require("../models/Enrollment");
 class CourseController {
   static async getAllCourses(req, res) {
     try {
-      const { category, college_type, min_price, max_price, limit, offset } =
-        req.query;
+      // ✨ --- START: THE FIX --- ✨
+      const { category, college_type, pharmacy_type, min_price, max_price, limit, offset } = req.query;
 
       const filters = {};
       if (category) filters.category = category;
       if (college_type) filters.college_type = college_type;
+      if (pharmacy_type) filters.pharmacy_type = pharmacy_type; // Added this line
+      // ✨ --- END: THE FIX --- ✨
       if (min_price) filters.min_price = parseFloat(min_price);
       if (max_price) filters.max_price = parseFloat(max_price);
       if (limit) filters.limit = parseInt(limit);
@@ -25,7 +27,6 @@ class CourseController {
       res.status(500).json({ error: error.message });
     }
   }
-
   static async getCourseById(req, res) {
     try {
       const { courseId } = req.params;

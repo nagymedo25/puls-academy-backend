@@ -10,13 +10,14 @@ class Course {
       description,
       category,
       college_type,
+      pharmacy_type, // Added this line
       price,
       preview_url,
       thumbnail_url,
     } = courseData;
     const sql = `
-      INSERT INTO Courses (title, description, category, college_type, price, preview_url, thumbnail_url)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO Courses (title, description, category, college_type, pharmacy_type, price, preview_url, thumbnail_url)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
     `;
     const result = await db.query(sql, [
@@ -24,12 +25,14 @@ class Course {
       description,
       category,
       college_type,
+      pharmacy_type, // Added this line
       price,
       preview_url,
       thumbnail_url,
     ]);
     return result.rows[0];
   }
+
 
   static async findById(courseId) {
     const sql = "SELECT * FROM Courses WHERE course_id = $1";
@@ -54,6 +57,16 @@ class Course {
       sql += ` AND c.category = $${paramIndex++}`;
       params.push(filters.category);
     }
+    // ✨ --- START: THE FIX --- ✨
+    if (filters.college_type) {
+      sql += ` AND c.college_type = $${paramIndex++}`;
+      params.push(filters.college_type);
+    }
+    if (filters.pharmacy_type) {
+      sql += ` AND c.pharmacy_type = $${paramIndex++}`;
+      params.push(filters.pharmacy_type);
+    }
+    // ✨ --- END: THE FIX --- ✨
     if (filters.min_price !== undefined) {
       sql += ` AND c.price >= $${paramIndex++}`;
       params.push(filters.min_price);
@@ -116,7 +129,7 @@ class Course {
     const values = [];
     let paramIndex = 1;
 
-    for (const key of ['title', 'description', 'category', 'college_type', 'price', 'preview_url', 'thumbnail_url']) {
+    for (const key of ['title', 'description', 'category', 'college_type', 'pharmacy_type', 'price', 'preview_url', 'thumbnail_url']) { // Added pharmacy_type
         if (courseData[key] !== undefined) {
             updates.push(`${key} = $${paramIndex++}`);
             values.push(courseData[key]);

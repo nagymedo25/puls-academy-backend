@@ -5,15 +5,15 @@ const { v4: uuidv4 } = require('uuid');
 class User {
   // ... (دوال create, findById, findByEmail, findByPhone تبقى كما هي)
   static async create(userData) {
-    const { name, email, phone, password, college, gender } = userData;
+    const { name, email, phone, password, college, gender, pharmacy_type } = userData; // Added pharmacy_type
     const password_hash = await hashPassword(password);
     const sql = `
-      INSERT INTO Users (name, email, phone, password_hash, college, gender)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO Users (name, email, phone, password_hash, college, gender, pharmacy_type)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING user_id
     `;
     try {
-      const result = await db.query(sql, [name, email, phone, password_hash, college, gender]);
+      const result = await db.query(sql, [name, email, phone, password_hash, college, gender, pharmacy_type]); // Added pharmacy_type
       return User.findById(result.rows[0].user_id);
     } catch (error) {
       if (error.code === '23505') { // Unique violation
@@ -45,7 +45,7 @@ class User {
   }
 
   // ✨ --- START: تعديل دالة تسجيل الدخول لإعفاء الأدمن --- ✨
-  static async login(emailOrPhone, password, deviceInfo) {
+static async login(emailOrPhone, password, deviceInfo) {
     const user = emailOrPhone.includes('@')
       ? await this.findByEmail(emailOrPhone)
       : await this.findByPhone(emailOrPhone);
