@@ -50,59 +50,73 @@ class User {
       ? await this.findByEmail(emailOrPhone)
       : await this.findByPhone(emailOrPhone);
 
-    if (!user) {
-      throw new Error("البريد الإلكتروني أو كلمة المرور غير صحيحة");
-    }
+    if (!user) throw new Error("البريد الإلكتروني أو كلمة المرور غير صحيحة");
 
     const isPasswordValid = await comparePassword(password, user.password_hash);
-    if (!isPasswordValid) {
-      throw new Error("البريد الإلكتروني أو كلمة المرور غير صحيحة");
-    }
+    if (!isPasswordValid) throw new Error("البريد الإلكتروني أو كلمة المرور غير صحيحة");
 
-    if (user.status === 'suspended') {
-      throw new Error("هذا الحساب معلق. يرجى التواصل مع الدعم الفني.");
-    }
+    if (user.status === 'suspended') throw new Error("هذا الحساب معلق.");
 
-    // -->> New Condition: Check if the user is an admin <<--
+    // Admin bypass remains the same
     if (user.role === 'admin') {
-      console.log("Admin login attempt detected. Bypassing security checks.");
-      // Clean up any old sessions for the admin for hygiene and create a new one
       await this.deleteSession(user.user_id);
-      const sessionToken = await this.createSession(user.user_id);
-      return {
-        status: 'success',
-        message: 'تم تسجيل دخول الأدمن بنجاح',
-        user: createSafeUserData(user),
-        token: sessionToken,
-      };
+      const sessionToken = await this.createSession(user.user_id, deviceInfo);
+      return { status: 'success', message: 'تم تسجيل دخول الأدمن بنجاح', user: createSafeUserData(user), token: sessionToken };
     }
 
-    // --- Security logic for students (remains as is) ---
-    const isDeviceApproved = await this.isDeviceApproved(user.user_id, deviceInfo.fingerprint, deviceInfo.userAgent);
+    // --- Student Security Logic ---
+    const isDeviceApproved = await this.isDeviceApproved(user.user_id, deviceInfo.fingerprint);
     if (!isDeviceApproved) {
       await this.createDeviceLoginRequest(user.user_id, deviceInfo);
-      return {
-        status: 'pending_approval',
-        message: 'هذا جهاز جديد. تم إرسال طلب للمشرف للموافقة على تسجيل دخولك.'
-      };
+      return { status: 'pending_approval', message: 'هذا جهاز جديد. تم إرسال طلب للمشرف للموافقة.' };
     }
 
+    // The intelligent violation check starts here
     const existingSession = await this.getActiveSession(user.user_id);
+
     if (existingSession) {
-      await this.recordViolation(user.user_id, 'concurrent_login', {
-        message: `محاولة تسجيل دخول متزامنة. تم إنهاء الجلسة القديمة.`,
-        newDevice: deviceInfo
-      });
+      // Check if the login attempt is from a DIFFERENT device
+      if (existingSession.device_fingerprint !== deviceInfo.fingerprint) {
+        // THIS is a real violation (concurrent login from a new device)
+        await this.recordViolation(user.user_id, 'concurrent_login', {
+          message: `محاولة تسجيل دخول متزامنة من جهاز مختلف.`,
+          newDevice: deviceInfo,
+          oldDeviceFingerprint: existingSession.device_fingerprint
+        });
+      }
+      // If the fingerprint is the same, it's a simple re-login, so we do nothing and just create a new session.
+
+      // In both cases (violation or not), we terminate the old session.
       await this.deleteSession(user.user_id);
     }
 
-    const sessionToken = await this.createSession(user.user_id);
+    // Create a new session with the current device fingerprint
+    const newSessionToken = await this.createSession(user.user_id, deviceInfo);
+
     return {
       status: 'success',
       message: 'تم تسجيل الدخول بنجاح',
       user: createSafeUserData(user),
-      token: sessionToken,
+      token: newSessionToken,
     };
+  }
+  // ✨ --- END: The New Intelligent Login Logic --- ✨
+
+  // ✨ --- Helper methods need to be updated to handle the fingerprint --- ✨
+  static async createSession(userId, deviceInfo) {
+    const sessionToken = uuidv4();
+    const deviceFingerprint = deviceInfo ? deviceInfo.fingerprint : null; // Handle cases where deviceInfo is not available (like admin)
+
+    await db.query(
+      'INSERT INTO ActiveSessions (user_id, session_token, device_fingerprint) VALUES ($1, $2, $3)',
+      [userId, sessionToken, deviceFingerprint]
+    );
+    return sessionToken;
+  }
+
+  static async getActiveSession(userId) {
+    const result = await db.query('SELECT * FROM ActiveSessions WHERE user_id = $1', [userId]);
+    return result.rows[0]; // Returns the full session object including the fingerprint
   }
   // ✨ --- END: تعديل دالة تسجيل الدخول --- ✨
 
@@ -157,6 +171,23 @@ class User {
     const client = await db.connect();
     try {
       await client.query('BEGIN');
+
+      // خطوة جديدة: التحقق من وجود مخالفة مشابهة حديثًا لمنع التكرار الناتج عن حالة السباق
+      const recentViolation = await client.query(
+        `SELECT 1 FROM Violations 
+                 WHERE user_id = $1 AND violation_type = $2 
+                 AND created_at > NOW() - INTERVAL '10 seconds'`,
+        [userId, type]
+      );
+
+      // إذا تم العثور على مخالفة حديثة، نتجاهل الطلب الحالي ونخرج
+      if (recentViolation.rowCount > 0) {
+        console.log(`Duplicate violation attempt for user ${userId} ignored.`);
+        await client.query('COMMIT'); // ننهي المعاملة بنجاح دون فعل أي شيء
+        return;
+      }
+
+      // إذا لم تكن هناك مخالفة حديثة، نكمل عملية التسجيل كالمعتاد
       await client.query(
         'INSERT INTO Violations (user_id, violation_type, details) VALUES ($1, $2, $3)',
         [userId, type, JSON.stringify(details)]
@@ -165,8 +196,14 @@ class User {
         'UPDATE Users SET violation_count = violation_count + 1 WHERE user_id = $1 RETURNING violation_count',
         [userId]
       );
+
       await client.query('COMMIT');
-      return result.rows[0].violation_count;
+
+      // نتأكد من أن هناك نتيجة قبل إرجاعها
+      if (result.rows[0]) {
+        return result.rows[0].violation_count;
+      }
+
     } catch (e) {
       await client.query('ROLLBACK');
       throw e;

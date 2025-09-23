@@ -30,4 +30,10 @@ router.put('/users/:userId/suspend', authMiddleware, adminMiddleware, AdminContr
 router.put('/users/:userId/reactivate', authMiddleware, adminMiddleware, AdminController.reactivateUser);
 
 
+// ✨ A new, dedicated route for updating student status.
+router.patch('/students/:studentId/status', authMiddleware, adminMiddleware, AdminController.updateStudentStatus);
+
+// The DELETE route remains for actual deletions.
+router.delete('/students/:studentId', authMiddleware, adminMiddleware, AdminController.deleteStudent);
+
 module.exports = router;

@@ -42,6 +42,44 @@ class AdminController {
     }
 
 
+      static async updateStudentStatus(req, res) {
+        const { studentId } = req.params;
+        const { status } = req.body;
+
+        // A simple validation to ensure the status is one of the allowed values.
+        if (!['active', 'suspended'].includes(status)) {
+            return res.status(400).json({ error: 'الحالة غير صالحة.' });
+        }
+
+        try {
+            const updatedUser = await User.updateStatus(studentId, status);
+            
+            // Also, terminate any active sessions if the user is suspended.
+            if (status === 'suspended') {
+                await User.deleteSession(studentId);
+            }
+
+            res.json({ 
+                message: `تم تحديث حالة الطالب بنجاح إلى '${status}'.`,
+                user: updatedUser 
+            });
+        } catch (error) {
+            res.status(500).json({ error: 'حدث خطأ أثناء تحديث حالة الطالب.' });
+        }
+    }
+
+
+        static async deleteStudent(req, res) {
+        // This function now correctly handles only the deletion.
+        const { studentId } = req.params;
+        try {
+            await User.delete(studentId);
+            res.json({ message: 'تم حذف الطالب بنجاح.' });
+        } catch (error) {
+            res.status(500).json({ error: 'حدث خطأ أثناء حذف الطالب.' });
+        }
+    }
+
     static async getAllUsers(req, res) {
         try {
             const { limit = 50, offset = 0 } = req.query;
@@ -321,12 +359,19 @@ class AdminController {
         const client = await db.connect();
         try {
             await client.query('BEGIN');
+
             // الحصول على معلومات الطلب
             const requestResult = await client.query('SELECT * FROM DeviceLoginRequests WHERE request_id = $1', [requestId]);
             if (requestResult.rowCount === 0) {
                 throw new Error('الطلب غير موجود');
             }
             const request = requestResult.rows[0];
+
+            // ✨ --- START: The Fix --- ✨
+            // خطوة جديدة: إنهاء جميع الجلسات النشطة الأخرى لهذا المستخدم
+            // هذا يمنع تسجيل مخالفة عند أول دخول من الجهاز الجديد
+            await User.deleteSession(request.user_id);
+            // ✨ --- END: The Fix --- ✨
 
             // إضافة الجهاز إلى قائمة الأجهزة المعتمدة
             await client.query(
@@ -341,7 +386,7 @@ class AdminController {
             // await Notification.create({ user_id: request.user_id, message: 'تمت الموافقة على جهازك الجديد. يمكنك الآن تسجيل الدخول منه.' });
 
             await client.query('COMMIT');
-            res.json({ message: 'تمت الموافقة على الجهاز بنجاح' });
+            res.json({ message: 'تمت الموافقة على الجهاز بنجاح وتم إنهاء أي جلسات أخرى نشطة.' });
         } catch (error) {
             await client.query('ROLLBACK');
             res.status(400).json({ error: error.message });
@@ -351,10 +396,18 @@ class AdminController {
     }
 
     static async rejectDeviceRequest(req, res) {
+        const { requestId } = req.params;
         try {
-            const { requestId } = req.params;
-            await db.query("UPDATE DeviceLoginRequests SET status = 'rejected' WHERE request_id = $1", [requestId]);
-            res.json({ message: 'تم رفض الجهاز بنجاح' });
+            const result = await db.query(
+                "UPDATE DeviceLoginRequests SET status = 'rejected' WHERE request_id = $1 RETURNING user_id", 
+                [requestId]
+            );
+
+            if (result.rowCount === 0) {
+                return res.status(404).json({ error: 'الطلب غير موجود' });
+            }
+
+            res.json({ message: 'تم رفض الطلب بنجاح.' });
         } catch (error) {
             res.status(400).json({ error: error.message });
         }
@@ -389,7 +442,7 @@ class AdminController {
         }
     }
 
-      static async getConversations(req, res) {
+    static async getConversations(req, res) {
         try {
             const conversations = await Message.getConversations();
             res.json({ conversations });
