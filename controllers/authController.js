@@ -18,7 +18,7 @@ const sendTokenCookie = (res, token) => {
 class AuthController {
   static async register(req, res) {
     try {
-      const { name, email, phone, password, college, gender } = req.body;
+      const { name, email, phone, password, college, gender, pharmacy_type } = req.body; // <-- تم إضافة pharmacy_type
 
       if (!name || !(email || phone) || !password || !college || !gender) {
         return res.status(400).json({ error: "يرجى ملء الحقول المطلوبة." });
@@ -31,26 +31,8 @@ class AuthController {
         password,
         college,
         gender,
-        is_verified: true, // Assuming auto-verification for now
-      });
-
-      // ✨ --- START: FIX FOR NEW USER SESSION --- ✨
-      // 1. Create a new session for the newly registered user.
-      const sessionToken = uuidv4();
-      await db.query(
-          'INSERT INTO ActiveSessions (user_id, session_token) VALUES ($1, $2)',
-          [user.user_id, sessionToken]
-      );
-
-      // 2. Generate a JWT that includes the new session ID.
-      const jwtToken = generateToken(user, sessionToken);
-      sendTokenCookie(res, jwtToken);
-      // ✨ --- END: FIX FOR NEW USER SESSION --- ✨
-
-      res.status(201).json({
-        message: "تم إنشاء الحساب بنجاح",
-        user,
-        token: jwtToken, // Send the correct token
+        pharmacy_type, // <-- تم تمريرها هنا
+        is_verified: true,
       });
     } catch (error) {
       if (error.message.includes("مسجل بالفعل")) {
@@ -84,7 +66,7 @@ class AuthController {
 
       if (result.status === 'success') {
         // ✨ Pass the session token to generateToken
-        const jwtToken = generateToken(result.user, result.token); 
+        const jwtToken = generateToken(result.user, result.token);
         sendTokenCookie(res, jwtToken);
         return res.json({
           message: result.message,
@@ -151,32 +133,32 @@ class AuthController {
 
   static async logout(req, res) {
     try {
-        const token = req.cookies.token;
+      const token = req.cookies.token;
 
-        // الخطوة 1: حذف الجلسة من قاعدة البيانات
-        if (token) {
-            try {
-                const decoded = jwt.verify(token, process.env.JWT_SECRET);
-                if (decoded.sessionId) {
-                    await db.query('DELETE FROM ActiveSessions WHERE session_token = $1', [decoded.sessionId]);
-                }
-            } catch (err) {
-                // تجاهل الأخطاء إذا كان التوكن غير صالح، المهم هو حذف الكوكي
-                console.error("Error decoding token on logout, proceeding to clear cookie:", err.message);
-            }
+      // الخطوة 1: حذف الجلسة من قاعدة البيانات
+      if (token) {
+        try {
+          const decoded = jwt.verify(token, process.env.JWT_SECRET);
+          if (decoded.sessionId) {
+            await db.query('DELETE FROM ActiveSessions WHERE session_token = $1', [decoded.sessionId]);
+          }
+        } catch (err) {
+          // تجاهل الأخطاء إذا كان التوكن غير صالح، المهم هو حذف الكوكي
+          console.error("Error decoding token on logout, proceeding to clear cookie:", err.message);
         }
+      }
 
-        // الخطوة 2: حذف الكوكي من المتصفح
-        const cookieOptions = {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-        };
-        res.clearCookie('token', cookieOptions);
+      // الخطوة 2: حذف الكوكي من المتصفح
+      const cookieOptions = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      };
+      res.clearCookie('token', cookieOptions);
 
-        res.json({ message: 'تم تسجيل الخروج بنجاح' });
+      res.json({ message: 'تم تسجيل الخروج بنجاح' });
     } catch (error) {
-        res.status(500).json({ error: 'حدث خطأ أثناء تسجيل الخروج' });
+      res.status(500).json({ error: 'حدث خطأ أثناء تسجيل الخروج' });
     }
   }
 }
