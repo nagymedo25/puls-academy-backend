@@ -18,8 +18,7 @@ const sendTokenCookie = (res, token) => {
 class AuthController {
   static async register(req, res) {
     try {
-      // ✨ قم بإضافة pharmacy_type هنا
-      const { name, email, phone, password, college, gender, pharmacy_type } = req.body;
+      const { name, email, phone, password, college, gender, pharmacy_type } = req.body; // <-- تم إضافة pharmacy_type
 
       if (!name || !(email || phone) || !password || !college || !gender) {
         return res.status(400).json({ error: "يرجى ملء الحقول المطلوبة." });
@@ -32,27 +31,8 @@ class AuthController {
         password,
         college,
         gender,
-        pharmacy_type, // ✨ وقم بتمريرها هنا
+        pharmacy_type, // <-- تم تمريرها هنا
         is_verified: true,
-      });
-
-      // ✨ --- START: FIX FOR NEW USER SESSION --- ✨
-      // 1. Create a new session for the newly registered user.
-      const sessionToken = uuidv4();
-      await db.query(
-        'INSERT INTO ActiveSessions (user_id, session_token) VALUES ($1, $2)',
-        [user.user_id, sessionToken]
-      );
-
-      // 2. Generate a JWT that includes the new session ID.
-      const jwtToken = generateToken(user, sessionToken);
-      sendTokenCookie(res, jwtToken);
-      // ✨ --- END: FIX FOR NEW USER SESSION --- ✨
-
-      res.status(201).json({
-        message: "تم إنشاء الحساب بنجاح",
-        user,
-        token: jwtToken, // Send the correct token
       });
     } catch (error) {
       if (error.message.includes("مسجل بالفعل")) {

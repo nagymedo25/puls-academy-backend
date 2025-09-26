@@ -4,7 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 
 class User {
   // ... (دوال create, findById, findByEmail, findByPhone تبقى كما هي)
-  static async create(userData) {
+   static async create(userData) {
     const { name, email, phone, password, college, gender, pharmacy_type } = userData; // Added pharmacy_type
     const password_hash = await hashPassword(password);
     const sql = `
@@ -22,7 +22,7 @@ class User {
       throw error;
     }
   }
-
+  
   static async findById(userId) {
     const sql = "SELECT * FROM Users WHERE user_id = $1";
     const result = await db.query(sql, [userId]);
