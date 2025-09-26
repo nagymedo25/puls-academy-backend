@@ -100,6 +100,16 @@ static async login(emailOrPhone, password, deviceInfo) {
       token: newSessionToken,
     };
   }
+
+   static async findById(userId) {
+    const [rows] = await db.promise().query('SELECT * FROM users WHERE user_id = ?', [userId]);
+    if (rows.length === 0) {
+      return null;
+    }
+    const user = new User(rows[0]);
+    delete user.password; // التأكد من عدم إرجاع كلمة المرور
+    return user;
+  }
   // ✨ --- END: The New Intelligent Login Logic --- ✨
 
   // ✨ --- Helper methods need to be updated to handle the fingerprint --- ✨
@@ -112,6 +122,17 @@ static async login(emailOrPhone, password, deviceInfo) {
       [userId, sessionToken, deviceFingerprint]
     );
     return sessionToken;
+  }
+
+   static async updateSpecialization(userId, pharmacyType) {
+    const query = 'UPDATE users SET pharmacy_type = ? WHERE user_id = ?';
+    await db.promise().query(query, [pharmacyType, userId]);
+    
+    // إرجاع بيانات المستخدم المحدثة
+    const [rows] = await db.promise().query('SELECT * FROM users WHERE user_id = ?', [userId]);
+    const user = new User(rows[0]);
+    delete user.password; // التأكد من عدم إرجاع كلمة المرور
+    return user;
   }
 
   static async getActiveSession(userId) {

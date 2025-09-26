@@ -14,5 +14,9 @@ router.get('/profile', authMiddleware, AuthController.getProfile);
 router.put('/profile', authMiddleware, AuthController.updateProfile);
 router.put('/change-password', authMiddleware, AuthController.changePassword);
 router.post('/logout', authMiddleware, AuthController.logout);
+router.put('/update-specialization', authenticateToken, AuthController.updateSpecialization);
+router.get('/profile', authenticateToken, AuthController.getProfile);
+
+
 
 module.exports = router;
