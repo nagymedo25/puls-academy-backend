@@ -4,7 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 
 class User {
   // ... (دوال create, findById, findByEmail, findByPhone تبقى كما هي)
-   static async create(userData) {
+  static async create(userData) {
     const { name, email, phone, password, college, gender, pharmacy_type } = userData; // Added pharmacy_type
     const password_hash = await hashPassword(password);
     const sql = `
@@ -22,7 +22,7 @@ class User {
       throw error;
     }
   }
-  
+
   static async findById(userId) {
     const sql = "SELECT * FROM Users WHERE user_id = $1";
     const result = await db.query(sql, [userId]);
@@ -100,16 +100,6 @@ static async login(emailOrPhone, password, deviceInfo) {
       token: newSessionToken,
     };
   }
-
-   static async findById(userId) {
-    const [rows] = await db.promise().query('SELECT * FROM users WHERE user_id = ?', [userId]);
-    if (rows.length === 0) {
-      return null;
-    }
-    const user = new User(rows[0]);
-    delete user.password; // التأكد من عدم إرجاع كلمة المرور
-    return user;
-  }
   // ✨ --- END: The New Intelligent Login Logic --- ✨
 
   // ✨ --- Helper methods need to be updated to handle the fingerprint --- ✨
@@ -122,17 +112,6 @@ static async login(emailOrPhone, password, deviceInfo) {
       [userId, sessionToken, deviceFingerprint]
     );
     return sessionToken;
-  }
-
-   static async updateSpecialization(userId, pharmacyType) {
-    const query = 'UPDATE users SET pharmacy_type = ? WHERE user_id = ?';
-    await db.promise().query(query, [pharmacyType, userId]);
-    
-    // إرجاع بيانات المستخدم المحدثة
-    const [rows] = await db.promise().query('SELECT * FROM users WHERE user_id = ?', [userId]);
-    const user = new User(rows[0]);
-    delete user.password; // التأكد من عدم إرجاع كلمة المرور
-    return user;
   }
 
   static async getActiveSession(userId) {
