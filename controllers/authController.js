@@ -18,12 +18,10 @@ const sendTokenCookie = (res, token) => {
 class AuthController {
   static async register(req, res) {
     try {
-      const { name, email, phone, password, college, gender, pharmacy_type } = req.body; // <-- تم إضافة pharmacy_type
-
+      const { name, email, phone, password, college, gender, pharmacy_type } = req.body;
       if (!name || !(email || phone) || !password || !college || !gender) {
         return res.status(400).json({ error: "يرجى ملء الحقول المطلوبة." });
       }
-
       const user = await User.create({
         name,
         email: email || null,
@@ -31,9 +29,23 @@ class AuthController {
         password,
         college,
         gender,
-        pharmacy_type, // <-- تم تمريرها هنا
+        pharmacy_type,
         is_verified: true,
       });
+
+      // 🆕 ADD THIS: Send success response
+      return res.status(201).json({
+        message: "تم إنشاء الحساب بنجاح",
+        user: {
+          id: user.user_id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          college: user.college,
+          gender: user.gender
+        }
+      });
+
     } catch (error) {
       if (error.message.includes("مسجل بالفعل")) {
         return res.status(409).json({ error: error.message });
